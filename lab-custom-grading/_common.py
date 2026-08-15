@@ -57,3 +57,86 @@ def oc_get_json(*args):
 def project_exists(name):
     result = subprocess.run(["oc", "get", "project", name], capture_output=True)
     return result.returncode == 0
+
+
+# --- Helper per corsi RHCSA (RH124/RH134): niente OpenShift, i controlli
+# girano su workstation o su un host remoto (servera/serverb) raggiungibile
+# via SSH senza password, come nei grading ufficiali (labs.common.commands).
+
+
+def run(command, host="workstation", sudo=False):
+    """Esegue un comando su workstation (subprocess locale) o su un host
+    remoto della classroom (via `ssh`, chiavi già configurate dal corso).
+    Ritorna un subprocess.CompletedProcess (stdout/stderr come str).
+
+    sudo=True usa la password standard della classroom ("student", la
+    stessa indicata nelle guide ufficiali RH124/RH134), perché l'utente
+    student non ha sudo passwordless su servera/serverb."""
+    if sudo:
+        command = f"echo student | sudo -S -p '' {command}"
+    if host in ("workstation", "localhost", None):
+        return subprocess.run(
+            ["bash", "-c", command], capture_output=True, text=True
+        )
+    try:
+        return subprocess.run(
+            [
+                "ssh",
+                "-o", "BatchMode=yes",
+                "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=no",
+                host, command,
+            ],
+            capture_output=True, text=True, timeout=20,
+        )
+    except subprocess.TimeoutExpired:
+        # Host non ancora raggiungibile (es. una VM non ancora installata
+        # da questo stesso esercizio): non deve mai bloccare il grading.
+        return subprocess.CompletedProcess([command], 255, "", "ssh timeout")
+
+
+def command_ok(command, host="workstation", sudo=False):
+    """True se il comando esce con codice 0."""
+    return run(command, host=host, sudo=sudo).returncode == 0
+
+
+def user_exists(username, host="workstation"):
+    return command_ok(f"getent passwd {username}", host=host)
+
+
+def group_exists(groupname, host="workstation"):
+    return command_ok(f"getent group {groupname}", host=host)
+
+
+def package_installed(package, host="workstation"):
+    return command_ok(f"rpm -q {package}", host=host)
+
+
+def service_is_active(service, host="workstation"):
+    return command_ok(f"systemctl is-active --quiet {service}", host=host)
+
+
+def service_is_enabled(service, host="workstation"):
+    return command_ok(f"systemctl is-enabled --quiet {service}", host=host)
+
+
+def file_exists(path, host="workstation", sudo=False):
+    return command_ok(f"test -e {path}", host=host, sudo=sudo)
+
+
+def password_matches(username, plaintext, host="workstation"):
+    """Confronta la password di un utente locale con un valore atteso,
+    senza mai stamparla: legge l'hash da /etc/shadow (serve sudo) e lo
+    confronta ricalcolando l'hash con lo stesso salt via `crypt`."""
+    import crypt
+
+    result = run(f"getent shadow {username}", host=host, sudo=True)
+    if result.returncode != 0:
+        return False
+    fields = result.stdout.strip().split(":")
+    if len(fields) < 2:
+        return False
+    stored_hash = fields[1]
+    if not stored_hash or stored_hash in ("!", "*", "!!", "!!*"):
+        return False
+    return crypt.crypt(plaintext, stored_hash) == stored_hash

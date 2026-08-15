@@ -1,6 +1,12 @@
-# DO180/DO280 Lab Grade Monitor & Custom Grading
+# Lab Grade Monitor & Custom Grading
 
-Strumenti nati per il corso Red Hat **DO180 (Red Hat OpenShift Administration I)**, poi estesi anche a **DO280 (Red Hat OpenShift Administration II)**, che risolvono due problemi (il meccanismo è generico, vedi [CLAUDE.md](CLAUDE.md) per estenderlo ad altri corsi):
+Strumenti nati per il corso Red Hat **DO180 (Red Hat OpenShift Administration
+I)**, ma il meccanismo è generico: qualunque corso eseguito con lo stesso tool
+`lab` (rpm `lab-service`) può avere script di grading custom aggiunti qui
+(vedi [CLAUDE.md](CLAUDE.md) per estenderlo ad altri corsi). Oggi il repo
+copre anche **DO280 (Red Hat OpenShift Administration II)**, **RH124 (Red
+Hat System Administration I)** e **RH134 (Red Hat System Administration
+II)**. Risolvono due problemi:
 
 1. **Nessun feedback visivo dopo `lab start`.** Un monitor grafico (Tkinter) si apre automaticamente e mostra, come una fila di semafori, l'esito di `lab grade` aggiornato periodicamente.
 2. **Molte guided exercise non hanno un `lab grade` ufficiale.** Un wrapper attorno al comando `lab` intercetta la risposta `"The grade command is not supported for this lab."` e, se esiste, esegue al suo posto uno script di grading "custom" scritto per quell'esercizio specifico.
@@ -79,10 +85,14 @@ FAIL Titolo del check
 Questo formato (`PASS`/`FAIL <titolo>` + dettagli indentati di 8 spazi) è compatibile con il parser di `lab_grade_monitor.py`, quindi i risultati appaiono correttamente anche come semafori nella finestra grafica.
 
 `_common.py` fornisce inoltre:
-- `oc_get_json(*args)` — esegue `oc get <args> -o json` e ritorna il dict Python, o `None` se la risorsa non esiste.
-- `project_exists(name)` — controlla se un progetto OpenShift esiste.
+- `oc_get_json(*args)` — esegue `oc get <args> -o json` e ritorna il dict Python, o `None` se la risorsa non esiste. (OpenShift/DO180)
+- `project_exists(name)` — controlla se un progetto OpenShift esiste. (OpenShift/DO180)
+- `run(command, host="workstation", sudo=False)` — esegue un comando in locale o su un host della classroom (`servera`/`serverb`) via `ssh`, per corsi non-OpenShift come RH124/RH134.
+- `command_ok`, `user_exists`, `group_exists`, `package_installed`, `service_is_active`, `service_is_enabled`, `file_exists` — helper generici costruiti su `run()` per i controlli RHCSA più comuni.
 
 ## Esercizi coperti
+
+### DO180 (Red Hat OpenShift Administration I)
 
 Script di grading scritti (in `lab-custom-grading/`):
 
@@ -110,6 +120,70 @@ Tutte le 19 guided exercise del corso che non hanno un `lab grade` ufficiale son
 - Cap. 8 Application Security: `appsec-scc`, `appsec-api`, `appsec-prune`
 
 Scritti a partire dal testo integrale della guida studente (PDF ufficiale DO280-RHOCP4.18-en-1-20251205) incrociato con `materials/labs`/`materials/solutions` del pacchetto `rht-labs-do280`, quando presenti. Alcuni esercizi non avevano alcun materiale in cache (`packaged-charts`, `auth-rbac`, `selfservice-quotas`, `selfservice-ranges`, `appsec-scc`): i relativi script si basano solo sul testo della guida, e alcuni dettagli non documentati con precisione (es. valori CPU non menzionati in `selfservice-ranges`) sono stati volutamente omessi invece di essere inventati — vedi i commenti in testa a ciascun file. `appsec-prune.py` documenta una discrepanza reale trovata fra `materials/solutions/appsec-prune/rbac-prune.yaml` e il testo della guida (percorso RBAC diverso): è stato seguito il testo della guida, più affidabile.
+
+### RH124 (Red Hat System Administration I)
+
+Nessuno di questi esercizi ha `materials/solutions/` né un `resources.txt`
+utile in cache (sono guided exercise puramente CLI): la specifica è stata
+ricavata dal testo della guida ufficiale (PDF `RH124_..._en_10.0.pdf`),
+citando sezione/pagina nel docstring di ogni script.
+
+- `lightspeed-assistant` (5.2), `files-manage` (7.2), `users-user` (10.6),
+  `software-dnf` (12.4), `flatpak-configure` (13.2), `processes-kill` (15.6),
+  `processes-monitor` (15.8), `services-control` (16.4), `net-configure` (18.2),
+  `net-edit` (18.4)
+
+Esercizi guidati RH124 **senza** grading ufficiale né custom (non gradabili
+in modo oggettivo: puro `man`/`locate`/`find` esplorativo su stato
+preesistente della VM, nessuno stato persistente attribuibile allo
+studente):
+- `help-manual` (3.2) — solo consultazione di man page, nessun output verificabile a posteriori.
+- `fs-locate` (14.6) — solo interrogazioni `locate`/`find` in lettura; anche `updatedb` non è un segnale valido perché il DB di `plocate` viene aggiornato comunque da un timer di sistema indipendente.
+
+### RH134 (Red Hat System Administration II)
+
+Come per RH124, nessuno di questi esercizi ha `materials/solutions/` né un
+`resources.txt` utile in cache: la specifica è stata ricavata dal testo
+della guida ufficiale (PDF `RH134_..._en_10.0.pdf`), citando sezione/pagina
+nel docstring di ogni script. Gira su `servera`/`serverb`/`workstation` a
+seconda dell'esercizio; alcuni esercizi del capitolo 16/18 (installazione
+RHEL/image mode) dipendono da un host `serverc` che non esiste finché
+l'installazione (interattiva o via Kickstart) non è completata — il
+grading verifica lo stato solo quando `serverc` diventa raggiungibile via
+SSH, senza mai bloccare (vedi il timeout SSH aggiunto a `run()` in
+`_common.py`).
+
+- Cap. 1: `scripts-env`, `scripts-write`, `scripts-loops`
+- Cap. 2: `regexes-regex`
+- Cap. 3: `scheduling-at`, `scheduling-cron`
+- Cap. 4: `systasks-timers`, `systasks-tempfiles`, `systasks-syscron`
+- Cap. 5: `logs-syslog`, `logs-preserve`, `logs-maintain`
+- Cap. 6: `selinux-opsmode`, `selinux-filecontexts`, `selinux-booleans`, `selinux-issues`
+- Cap. 7: `archive-manage`
+- Cap. 8: `rcopy-sync`
+- Cap. 9: `tuning-profiles`
+- Cap. 10: `storage-partitions`, `storage-swap`
+- Cap. 11: `lvm-create`, `lvm-extend`
+- Cap. 12: `boot-grub`, `boot-selecting`, `boot-repairing`
+- Cap. 13: `rootpw-recover`
+- Cap. 14: `netsecurity-firewalls`, `netsecurity-ports`
+- Cap. 15: `nfsclient-nfs`, `nfsclient-autofs`
+- Cap. 16: `installing-install`, `installing-kickstart`
+- Cap. 17: `containers-image`
+- Cap. 18: `image-bootable`, `image-server`, `image-manage`
+
+Alcuni esercizi fanno un "giro completo" (portano il sistema a uno stato
+che coincide con quello iniziale, es. `selinux-opsmode`, `boot-grub`,
+`boot-selecting`, `rootpw-recover`): il check verifica comunque lo stato
+finale corretto, ma non distingue "mai fatto" da "fatto e ripristinato
+correttamente" — è un limite intrinseco documentato nel docstring di
+ciascuno di questi script.
+
+Esercizi guidati RH134 **senza** grading ufficiale né custom (non
+gradabili in modo oggettivo):
+- `logs-systemd` (5.6) — solo query `journalctl` in lettura, nessuno stato persistente.
+- `tuning-nice` (9.4) — tutti i processi di test vengono terminati esplicitamente a fine esercizio, nessun residuo.
+- `containers-podman` (17.4) — round-trip completo (crea, verifica, rimuove tutti i container), nessuno stato finale distintivo.
 
 ## Aggiungere il grading per un nuovo esercizio
 
