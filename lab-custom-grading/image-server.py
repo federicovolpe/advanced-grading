@@ -63,9 +63,15 @@ def main():
             step.add_error("'This is image mode.' non trovato in /etc/motd")
 
     with GradingStep("Il filesystem radice e' immutabile (read-only, tipico di bootc)") as step:
-        result = run("touch /test.root", host=SERVERC, sudo=True)
-        if result.returncode == 0:
-            step.add_error("touch su / e' riuscito: il filesystem radice non risulta immutabile")
+        # Solo lettura (findmnt), non si tenta una scrittura reale su / per
+        # evitare di lasciare file residui in caso l'esercizio non sia
+        # ancora completato (root ancora scrivibile).
+        result = run("findmnt -no OPTIONS /", host=SERVERC, sudo=True)
+        options = result.stdout.strip().split(",")
+        if not options or options[0] != "ro":
+            step.add_error(
+                f"Atteso 'ro' come prima opzione di mount su /, trovato: {result.stdout.strip()}"
+            )
 
     with GradingStep("Il webserver bootc risponde correttamente da workstation") as step:
         result = run("curl -s http://serverc.lab.example.com")

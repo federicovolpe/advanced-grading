@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Grading "custom" per la guided exercise RH134 "systasks-tempfiles" (sezione
+Grading "custom" per la guided exercise RH134 "s-tempfiles" (sezione
 PDF 4.4 "Manage Temporary Files", pag. 91-92), sprovvista di `lab grade`
 ufficiale. Nessuna materials/solutions ne' resources.txt: specifica presa
 dal testo della guida, eseguita su servera.
@@ -35,7 +35,7 @@ def _significant_lines(content):
 
 
 def main():
-    print(f"🔧 Grading personalizzato per 'systasks-tempfiles' (host: {HOST})")
+    print(f"🔧 Grading personalizzato per 's-tempfiles' (host: {HOST})")
 
     with GradingStep(f"{TMP_CONF} contiene solo la regola richiesta (5 giorni)") as step:
         result = run(f"cat {TMP_CONF}", host=HOST, sudo=True)
