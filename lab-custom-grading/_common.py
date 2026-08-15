@@ -78,9 +78,21 @@ def run(command, host="workstation", sudo=False):
         return subprocess.run(
             ["bash", "-c", command], capture_output=True, text=True
         )
-    return subprocess.run(
-        ["ssh", host, command], capture_output=True, text=True
-    )
+    try:
+        return subprocess.run(
+            [
+                "ssh",
+                "-o", "BatchMode=yes",
+                "-o", "ConnectTimeout=5",
+                "-o", "StrictHostKeyChecking=no",
+                host, command,
+            ],
+            capture_output=True, text=True, timeout=20,
+        )
+    except subprocess.TimeoutExpired:
+        # Host non ancora raggiungibile (es. una VM non ancora installata
+        # da questo stesso esercizio): non deve mai bloccare il grading.
+        return subprocess.CompletedProcess([command], 255, "", "ssh timeout")
 
 
 def command_ok(command, host="workstation", sudo=False):
