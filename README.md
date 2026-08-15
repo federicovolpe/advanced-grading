@@ -1,6 +1,6 @@
-# DO180 Lab Grade Monitor & Custom Grading
+# DO180/DO280 Lab Grade Monitor & Custom Grading
 
-Strumenti per il corso Red Hat **DO180 (Red Hat OpenShift Administration I)** che risolvono due problemi:
+Strumenti nati per il corso Red Hat **DO180 (Red Hat OpenShift Administration I)**, poi estesi anche a **DO280 (Red Hat OpenShift Administration II)**, che risolvono due problemi (il meccanismo è generico, vedi [CLAUDE.md](CLAUDE.md) per estenderlo ad altri corsi):
 
 1. **Nessun feedback visivo dopo `lab start`.** Un monitor grafico (Tkinter) si apre automaticamente e mostra, come una fila di semafori, l'esito di `lab grade` aggiornato periodicamente.
 2. **Molte guided exercise non hanno un `lab grade` ufficiale.** Un wrapper attorno al comando `lab` intercetta la risposta `"The grade command is not supported for this lab."` e, se esiste, esegue al suo posto uno script di grading "custom" scritto per quell'esercizio specifico.
@@ -95,6 +95,21 @@ Script di grading scritti (in `lab-custom-grading/`):
 **Nota**: alcuni script sono stati scritti senza accesso al testo ufficiale della guida studente, basandosi solo su file di partenza/soluzione presenti in cache e su `resources.txt`. Quando il testo della guida è stato poi fornito (es. `reliability-autoscaling`, `pods-troubleshooting`), gli script sono stati raffinati con i valori esatti. Se noti un FAIL su un lavoro che ritieni corretto, probabilmente lo script va tarato meglio — apri una issue o modifica direttamente il file.
 
 Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato finale univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-routes`, `deploy-workloads`, `intro-monitor`, `pods-containers`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`.
+
+### DO280 (Red Hat OpenShift Administration II)
+
+Tutte le 19 guided exercise del corso che non hanno un `lab grade` ufficiale sono coperte:
+
+- Cap. 1 Declarative Resource Management: `declarative-manifests`, `declarative-kustomize`
+- Cap. 2 Deploying Packaged Applications: `packaged-templates`, `packaged-charts`
+- Cap. 3 Authentication and Authorization: `auth-providers`, `auth-rbac`
+- Cap. 4 Network Security: `network-ingress`, `network-policy`, `network-svccerts`
+- Cap. 5 Exposing non-HTTP/SNI Applications: `non-http-lb`, `non-http-multus`
+- Cap. 6 Enabling Developer Self-service: `selfservice-quotas`, `selfservice-ranges`, `selfservice-projtemplate`
+- Cap. 7 Managing Kubernetes Operators: `operators-web`, `operators-cli`
+- Cap. 8 Application Security: `appsec-scc`, `appsec-api`, `appsec-prune`
+
+Scritti a partire dal testo integrale della guida studente (PDF ufficiale DO280-RHOCP4.18-en-1-20251205) incrociato con `materials/labs`/`materials/solutions` del pacchetto `rht-labs-do280`, quando presenti. Alcuni esercizi non avevano alcun materiale in cache (`packaged-charts`, `auth-rbac`, `selfservice-quotas`, `selfservice-ranges`, `appsec-scc`): i relativi script si basano solo sul testo della guida, e alcuni dettagli non documentati con precisione (es. valori CPU non menzionati in `selfservice-ranges`) sono stati volutamente omessi invece di essere inventati — vedi i commenti in testa a ciascun file. `appsec-prune.py` documenta una discrepanza reale trovata fra `materials/solutions/appsec-prune/rbac-prune.yaml` e il testo della guida (percorso RBAC diverso): è stato seguito il testo della guida, più affidabile.
 
 ## Aggiungere il grading per un nuovo esercizio
 
