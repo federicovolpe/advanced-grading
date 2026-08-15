@@ -95,6 +95,22 @@ oggettivo (esplorazione CLI pura, più soluzioni valide, nessuno stato
 persistente, ecc.) — vedi la lista degli esercizi "non gradabili" in
 README.md per esempi reali di questo giudizio.
 
+**Attenzione — non confondere "nessuno stato persistente dopo `lab finish`"
+con "nessuno stato verificabile":** il monitor grafico ripete `lab grade`
+ogni 30s MENTRE lo studente lavora, quindi anche uno stato puramente
+temporaneo (un pod che la guida chiede di lasciare in esecuzione fino a
+`lab finish`, un servizio attivo solo per la durata dell'esercizio, ecc.) è
+gradabile "sul momento" — non serve che sopravviva alla pulizia finale.
+Prima di marcare un esercizio come "non gradabile" solo perché lo script
+ufficiale (`start()`/`finish()`) non applica manifest e non lascia nulla in
+`materials/solutions`, **leggi comunque il testo della guida fino in fondo**:
+spesso l'ultimo passo prima di "Finish" chiede esplicitamente di verificare
+che qualcosa sia ancora in esecuzione (es. `pods-containers` in DO180, Cap.
+3.2, punto 8.2: "Confirm that the pod is still running"). In questi casi
+scrivi comunque lo script, documentando chiaramente nel docstring che è un
+check dal vivo valido solo PRIMA di `lab finish` (dopo, il progetto sparisce
+ed è corretto che tutto torni FAIL).
+
 ## 3. Scrivi lo script
 
 Usa `lab-custom-grading/_common.py` (già generico, va bene per qualunque

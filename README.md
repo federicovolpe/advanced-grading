@@ -101,10 +101,11 @@ Script di grading scritti (in `lab-custom-grading/`):
 - `storage-statefulsets`, `storage-volumes`, `storage-configs`
 - `updates-rollout`, `updates-triggers`, `updates-imagestreams`
 - `intro-navigate`, `pods-troubleshooting`
+- `pods-containers` — **check "sul momento", non a posteriori**: la guida (Cap. 3.2) fa cancellare quasi tutti i pod creati, ma lascia deliberatamente `ubi9-command` in esecuzione fino a `lab finish`. Lo script grada quello stato live; dopo `lab finish` il progetto non esiste più ed è corretto che torni FAIL.
 
-**Nota**: alcuni script sono stati scritti senza accesso al testo ufficiale della guida studente, basandosi solo su file di partenza/soluzione presenti in cache e su `resources.txt`. Quando il testo della guida è stato poi fornito (es. `reliability-autoscaling`, `pods-troubleshooting`), gli script sono stati raffinati con i valori esatti. Se noti un FAIL su un lavoro che ritieni corretto, probabilmente lo script va tarato meglio — apri una issue o modifica direttamente il file.
+**Nota**: alcuni script sono stati scritti senza accesso al testo ufficiale della guida studente, basandosi solo su file di partenza/soluzione presenti in cache e su `resources.txt`. Quando il testo della guida è stato poi fornito (es. `reliability-autoscaling`, `pods-troubleshooting`, `pods-containers`), gli script sono stati raffinati/corretti con i valori esatti. Se noti un FAIL su un lavoro che ritieni corretto, probabilmente lo script va tarato meglio — apri una issue o modifica direttamente il file.
 
-Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato finale univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-routes`, `deploy-workloads`, `intro-monitor`, `pods-containers`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`.
+Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato — nemmeno temporaneo — univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-routes`, `deploy-workloads`, `intro-monitor`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`. **Da riverificare con il testo della guida** (lo stesso errore di giudizio di `pods-containers` — dedotto senza leggere il manuale — potrebbe valere anche per alcuni di questi).
 
 ### DO280 (Red Hat OpenShift Administration II)
 
