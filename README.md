@@ -1,6 +1,10 @@
-# DO180 Lab Grade Monitor & Custom Grading
+# Lab Grade Monitor & Custom Grading
 
-Strumenti per il corso Red Hat **DO180 (Red Hat OpenShift Administration I)** che risolvono due problemi:
+Strumenti nati per il corso Red Hat **DO180 (Red Hat OpenShift Administration I)**,
+ma il meccanismo è generico: qualunque corso eseguito con lo stesso tool `lab`
+(rpm `lab-service`) può avere script di grading custom aggiunti qui. Oggi il
+repo copre anche **RH124 (Red Hat System Administration I)**. Risolvono due
+problemi:
 
 1. **Nessun feedback visivo dopo `lab start`.** Un monitor grafico (Tkinter) si apre automaticamente e mostra, come una fila di semafori, l'esito di `lab grade` aggiornato periodicamente.
 2. **Molte guided exercise non hanno un `lab grade` ufficiale.** Un wrapper attorno al comando `lab` intercetta la risposta `"The grade command is not supported for this lab."` e, se esiste, esegue al suo posto uno script di grading "custom" scritto per quell'esercizio specifico.
@@ -79,10 +83,14 @@ FAIL Titolo del check
 Questo formato (`PASS`/`FAIL <titolo>` + dettagli indentati di 8 spazi) è compatibile con il parser di `lab_grade_monitor.py`, quindi i risultati appaiono correttamente anche come semafori nella finestra grafica.
 
 `_common.py` fornisce inoltre:
-- `oc_get_json(*args)` — esegue `oc get <args> -o json` e ritorna il dict Python, o `None` se la risorsa non esiste.
-- `project_exists(name)` — controlla se un progetto OpenShift esiste.
+- `oc_get_json(*args)` — esegue `oc get <args> -o json` e ritorna il dict Python, o `None` se la risorsa non esiste. (OpenShift/DO180)
+- `project_exists(name)` — controlla se un progetto OpenShift esiste. (OpenShift/DO180)
+- `run(command, host="workstation", sudo=False)` — esegue un comando in locale o su un host della classroom (`servera`/`serverb`) via `ssh`, per corsi non-OpenShift come RH124/RH134.
+- `command_ok`, `user_exists`, `group_exists`, `package_installed`, `service_is_active`, `service_is_enabled`, `file_exists` — helper generici costruiti su `run()` per i controlli RHCSA più comuni.
 
 ## Esercizi coperti
+
+### DO180 (Red Hat OpenShift Administration I)
 
 Script di grading scritti (in `lab-custom-grading/`):
 
@@ -95,6 +103,25 @@ Script di grading scritti (in `lab-custom-grading/`):
 **Nota**: alcuni script sono stati scritti senza accesso al testo ufficiale della guida studente, basandosi solo su file di partenza/soluzione presenti in cache e su `resources.txt`. Quando il testo della guida è stato poi fornito (es. `reliability-autoscaling`, `pods-troubleshooting`), gli script sono stati raffinati con i valori esatti. Se noti un FAIL su un lavoro che ritieni corretto, probabilmente lo script va tarato meglio — apri una issue o modifica direttamente il file.
 
 Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato finale univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-routes`, `deploy-workloads`, `intro-monitor`, `pods-containers`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`.
+
+### RH124 (Red Hat System Administration I)
+
+Nessuno di questi esercizi ha `materials/solutions/` né un `resources.txt`
+utile in cache (sono guided exercise puramente CLI): la specifica è stata
+ricavata dal testo della guida ufficiale (PDF `RH124_..._en_10.0.pdf`),
+citando sezione/pagina nel docstring di ogni script.
+
+- `lightspeed-assistant` (5.2), `files-manage` (7.2), `users-user` (10.6),
+  `software-dnf` (12.4), `flatpak-configure` (13.2), `processes-kill` (15.6),
+  `processes-monitor` (15.8), `services-control` (16.4), `net-configure` (18.2),
+  `net-edit` (18.4)
+
+Esercizi guidati RH124 **senza** grading ufficiale né custom (non gradabili
+in modo oggettivo: puro `man`/`locate`/`find` esplorativo su stato
+preesistente della VM, nessuno stato persistente attribuibile allo
+studente):
+- `help-manual` (3.2) — solo consultazione di man page, nessun output verificabile a posteriori.
+- `fs-locate` (14.6) — solo interrogazioni `locate`/`find` in lettura; anche `updatedb` non è un segnale valido perché il DB di `plocate` viene aggiornato comunque da un timer di sistema indipendente.
 
 ## Aggiungere il grading per un nuovo esercizio
 
