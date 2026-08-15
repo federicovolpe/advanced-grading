@@ -123,6 +123,51 @@ studente):
 - `help-manual` (3.2) — solo consultazione di man page, nessun output verificabile a posteriori.
 - `fs-locate` (14.6) — solo interrogazioni `locate`/`find` in lettura; anche `updatedb` non è un segnale valido perché il DB di `plocate` viene aggiornato comunque da un timer di sistema indipendente.
 
+### RH134 (Red Hat System Administration II)
+
+Come per RH124, nessuno di questi esercizi ha `materials/solutions/` né un
+`resources.txt` utile in cache: la specifica è stata ricavata dal testo
+della guida ufficiale (PDF `RH134_..._en_10.0.pdf`), citando sezione/pagina
+nel docstring di ogni script. Gira su `servera`/`serverb`/`workstation` a
+seconda dell'esercizio; alcuni esercizi del capitolo 16/18 (installazione
+RHEL/image mode) dipendono da un host `serverc` che non esiste finché
+l'installazione (interattiva o via Kickstart) non è completata — il
+grading verifica lo stato solo quando `serverc` diventa raggiungibile via
+SSH, senza mai bloccare (vedi il timeout SSH aggiunto a `run()` in
+`_common.py`).
+
+- Cap. 1: `scripts-env`, `scripts-write`, `scripts-loops`
+- Cap. 2: `regexes-regex`
+- Cap. 3: `scheduling-at`, `scheduling-cron`
+- Cap. 4: `systasks-timers`, `systasks-tempfiles`, `systasks-syscron`
+- Cap. 5: `logs-syslog`, `logs-preserve`, `logs-maintain`
+- Cap. 6: `selinux-opsmode`, `selinux-filecontexts`, `selinux-booleans`, `selinux-issues`
+- Cap. 7: `archive-manage`
+- Cap. 8: `rcopy-sync`
+- Cap. 9: `tuning-profiles`
+- Cap. 10: `storage-partitions`, `storage-swap`
+- Cap. 11: `lvm-create`, `lvm-extend`
+- Cap. 12: `boot-grub`, `boot-selecting`, `boot-repairing`
+- Cap. 13: `rootpw-recover`
+- Cap. 14: `netsecurity-firewalls`, `netsecurity-ports`
+- Cap. 15: `nfsclient-nfs`, `nfsclient-autofs`
+- Cap. 16: `installing-install`, `installing-kickstart`
+- Cap. 17: `containers-image`
+- Cap. 18: `image-bootable`, `image-server`, `image-manage`
+
+Alcuni esercizi fanno un "giro completo" (portano il sistema a uno stato
+che coincide con quello iniziale, es. `selinux-opsmode`, `boot-grub`,
+`boot-selecting`, `rootpw-recover`): il check verifica comunque lo stato
+finale corretto, ma non distingue "mai fatto" da "fatto e ripristinato
+correttamente" — è un limite intrinseco documentato nel docstring di
+ciascuno di questi script.
+
+Esercizi guidati RH134 **senza** grading ufficiale né custom (non
+gradabili in modo oggettivo):
+- `logs-systemd` (5.6) — solo query `journalctl` in lettura, nessuno stato persistente.
+- `tuning-nice` (9.4) — tutti i processi di test vengono terminati esplicitamente a fine esercizio, nessun residuo.
+- `containers-podman` (17.4) — round-trip completo (crea, verifica, rimuove tutti i container), nessuno stato finale distintivo.
+
 ## Aggiungere il grading per un nuovo esercizio
 
 1. Crea `~/.local/share/lab-custom-grading/<nome-esercizio>.py` (o direttamente in `lab-custom-grading/` in questo repo).
