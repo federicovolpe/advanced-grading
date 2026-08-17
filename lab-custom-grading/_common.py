@@ -140,3 +140,196 @@ def password_matches(username, plaintext, host="workstation"):
     if not stored_hash or stored_hash in ("!", "*", "!!", "!!*"):
         return False
     return crypt.crypt(plaintext, stored_hash) == stored_hash
+
+
+# --- Helper per corsi Podman (DO188): niente RHCSA/OpenShift, i controlli
+# girano su container/immagini/reti/volumi Podman locali sulla workstation.
+# Tutte le funzioni accettano sudo=True per i pochi esercizi (es.
+# custom-rootless) che confrontano container/immagini rootless vs rootful.
+
+
+def _podman_cmd(args, sudo=False):
+    return (["sudo"] if sudo else []) + ["podman", *args]
+
+
+def podman_inspect(*args, sudo=False):
+    """Esegue `podman inspect <args>` e ritorna la lista di dict decodificata,
+    o None se la risorsa non esiste o il comando fallisce."""
+    result = subprocess.run(
+        _podman_cmd(["inspect", *args], sudo=sudo),
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def podman_container(name, sudo=False):
+    """Ritorna il dict `podman inspect` di un container, o None se non esiste."""
+    data = podman_inspect(name, sudo=sudo)
+    return data[0] if data else None
+
+
+def podman_image(name, sudo=False):
+    """Ritorna il dict `podman inspect` di un'immagine, o None se non esiste."""
+    data = podman_inspect(name, sudo=sudo)
+    return data[0] if data else None
+
+
+def container_is_running(name, sudo=False):
+    c = podman_container(name, sudo=sudo)
+    return bool(c and c.get("State", {}).get("Running"))
+
+
+def container_networks(name, sudo=False):
+    """Ritorna l'insieme dei nomi delle reti Podman collegate al container."""
+    c = podman_container(name, sudo=sudo)
+    if not c:
+        return set()
+    return set((c.get("NetworkSettings") or {}).get("Networks", {}).keys())
+
+
+def container_port_mappings(name, sudo=False):
+    """Ritorna {"<porta_container>/<proto>": ["<porta_host>", ...]} dalle
+    PortBindings del container (solo porte effettivamente pubblicate)."""
+    c = podman_container(name, sudo=sudo)
+    if not c:
+        return {}
+    bindings = (c.get("HostConfig") or {}).get("PortBindings") or {}
+    return {k: [b.get("HostPort") for b in v] for k, v in bindings.items() if v}
+
+
+def container_env(name, sudo=False):
+    """Ritorna un dict delle env var del container, da Config.Env."""
+    c = podman_container(name, sudo=sudo)
+    if not c:
+        return {}
+    result = {}
+    for item in (c.get("Config") or {}).get("Env", []) or []:
+        if "=" in item:
+            k, v = item.split("=", 1)
+            result[k] = v
+    return result
+
+
+def container_mounts(name, sudo=False):
+    """Ritorna la lista dei mount del container (ciascuno un dict con
+    almeno Source/Destination/Type, come da `podman inspect`.Mounts)."""
+    c = podman_container(name, sudo=sudo)
+    if not c:
+        return []
+    return c.get("Mounts") or []
+
+
+def podman_network_exists(name, sudo=False):
+    result = subprocess.run(_podman_cmd(["network", "exists", name], sudo=sudo), capture_output=True)
+    return result.returncode == 0
+
+
+def podman_volume_exists(name, sudo=False):
+    result = subprocess.run(_podman_cmd(["volume", "exists", name], sudo=sudo), capture_output=True)
+    return result.returncode == 0
+
+
+def podman_volume_mountpoint(name, sudo=False):
+    """Ritorna la Mountpoint del volume sul filesystem host, o None."""
+    data = podman_inspect(name, sudo=sudo)
+    if not data:
+        return None
+    return data[0].get("Mountpoint")
+
+
+def podman_exec(name, *args, sudo=False):
+    """Esegue `podman exec <name> <args>`. Ritorna un subprocess.CompletedProcess."""
+    return subprocess.run(_podman_cmd(["exec", name, *args], sudo=sudo), capture_output=True, text=True)
+
+
+def podman_logs(name, sudo=False):
+    """Ritorna lo stdout+stderr di `podman logs <name>` (stringa unica), o "" se il
+    container non esiste."""
+    result = subprocess.run(_podman_cmd(["logs", name], sudo=sudo), capture_output=True, text=True)
+    if result.returncode != 0:
+        return ""
+    return result.stdout + result.stderr
+
+
+def http_get(url, timeout=5):
+    """Esegue una GET con curl (nessuna dipendenza extra tipo `requests`).
+    Ritorna (ok, body): ok è True solo se la richiesta HTTP ha avuto successo
+    (curl -f, quindi anche un 4xx/5xx del server conta come non-ok)."""
+    result = subprocess.run(
+        ["curl", "-fsS", "--max-time", str(timeout), url],
+        capture_output=True, text=True,
+    )
+    return result.returncode == 0, result.stdout
+
+
+def http_get_follow(url, timeout=5):
+    """Come http_get, ma segue i redirect HTTP (curl -L): serve per gli
+    esercizi (es. persisting-lab) dove un endpoint risponde con un redirect
+    verso un altro container/porta e la specifica di grading ufficiale usa
+    `requests.get()`, che segue i redirect di default."""
+    result = subprocess.run(
+        ["curl", "-fsSL", "--max-time", str(timeout), url],
+        capture_output=True, text=True,
+    )
+    return result.returncode == 0, result.stdout
+
+
+def http_get_insecure(url, timeout=5):
+    """Come http_get, ma senza validare il certificato TLS (curl -k): serve
+    per gli esercizi (es. custom-lab) che generano un certificato
+    self-signed e vanno testati su https:// senza una CA valida."""
+    result = subprocess.run(
+        ["curl", "-fsSk", "--max-time", str(timeout), url],
+        capture_output=True, text=True,
+    )
+    return result.returncode == 0, result.stdout
+
+
+def selinux_label_ok(path, expected_type="container_file_t"):
+    """Replica util.get_selinux_permissions usata dal grading ufficiale DO188
+    (vedi common/watch_functions.py -> check_bindmount_access): esegue
+    `ls -Z(d)` sul path host di un bind mount e verifica il context SELinux
+    atteso (quello impostato da `:Z` sull'opzione -v/volumes di podman)."""
+    import os
+    path = os.path.expanduser(path)
+    if not os.path.exists(path):
+        return False
+    option = "-Zd" if os.path.isdir(path) else "-Z"
+    result = subprocess.run(["ls", option, path], capture_output=True, text=True)
+    return expected_type in result.stdout
+
+
+def skopeo_inspect(image_ref, tls_verify=True, timeout=15):
+    """Esegue `skopeo inspect docker://<image_ref>` SENZA credenziali (utile
+    per verificare che un'immagine in un registry sia davvero pubblica, come
+    fa do188/images-lab.py per verificare il push dello studente). Ritorna
+    (ok, dict-o-None): ok e' True solo se il comando ha successo senza fornire
+    credenziali. tls_verify=False disabilita la verifica del certificato
+    (serve solo se la CA della classroom non e' installata)."""
+    args = ["skopeo", "inspect", f"docker://{image_ref}"]
+    if not tls_verify:
+        args.append("--tls-verify=false")
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        return False, None
+    try:
+        return True, json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return True, None
+
+
+def oc_logs(name, namespace, tail=None):
+    """Esegue `oc logs <name> -n <namespace>` e ritorna lo stdout (stringa), o
+    "" se il comando fallisce (pod non trovato, non ancora pronto, ecc.)."""
+    args = ["oc", "logs", name, "-n", namespace]
+    if tail is not None:
+        args += ["--tail", str(tail)]
+    result = subprocess.run(args, capture_output=True, text=True)
+    if result.returncode != 0:
+        return ""
+    return result.stdout
