@@ -206,6 +206,27 @@ gradabili in modo oggettivo):
 - `tuning-nice` (9.4) — tutti i processi di test vengono terminati esplicitamente a fine esercizio, nessun residuo.
 - `containers-podman` (17.4) — round-trip completo (crea, verifica, rimuove tutti i container), nessuno stato finale distintivo.
 
+### DO432 (Multicluster Management with Red Hat Advanced Cluster Management for Kubernetes)
+
+A differenza degli altri corsi qui sopra, DO432 gestisce SEMPRE due cluster OpenShift distinti (il hub RHACM e un "managed cluster"): `_common.py` espone `oc_get_json_hub`/`oc_get_json_managed`/`project_exists_hub`/`project_exists_managed` (kubeconfig cache in `~/.auth/ocp4-kubeconfig`/`~/.auth/ocp4-mng-kubeconfig`, popolati da `start()` tramite `rht-labs-acm`, indipendenti da dove sia loggata la sessione `oc` corrente dello studente) e `condition_true` (per CR con `status.conditions` standard, es. `ManagedCluster`).
+
+17 delle 18 guided exercise del corso senza `lab grade` ufficiale sono coperte (le 5 "review" di fine capitolo hanno già un `lab grade` ufficiale, non toccate). **Nota**: `virtualization-manage` e `virtualization-monitor` non compaiono in `~/.grading/lab_manifest.json` di questa macchina — quel file è un tracker di curriculum incompleto, non autoritativo — ma esistono come guided exercise reali (moduli con `__LAB__`, materiali dedicati, GE 6.6/6.8 nella guida) e sono quindi gradati comunque, seguendo CLAUDE.md step 1 (il pacchetto installato come fonte di verità).
+
+- Cap. 1 Installing RHACM: `install-rhacm`
+- Cap. 2 Managing Multiple Clusters: `manage-navigate`, `manage-configure`, `manage-troubleshoot`
+- Cap. 3 Governance and Policies: `policies-deploy`, `policies-generator`, `policies-compliance`, `policies-integration`, `policies-troubleshoot`
+- Cap. 4 Observability: `observability-enable`, `observability-customize`
+- Cap. 5 Application Lifecycle Management with GitOps: `gitops-configure`, `gitops-deploy`, `gitops-troubleshoot`
+- Cap. 6 OpenShift Virtualization with RHACM: `virtualization-deploy`, `virtualization-manage`, `virtualization-monitor`
+
+Scritti a partire dal testo integrale della guida studente (PDF ufficiale DO432-RHACM2.13-en-2) incrociato con `materials/labs`/`materials/solutions` dei pacchetti `do0011l`..`do0016l`, quando presenti (`policies-generator`, `gitops-deploy` e `install-rhacm` non hanno alcun materiale in cache — script basati solo sul testo guida). Nessun cluster era raggiungibile da questa macchina durante la scrittura (kubeconfig assente): nessuno script è stato testato end-to-end, solo analisi statica.
+
+Diversi esercizi fanno un "giro completo" (creano poi cancellano la risorsa principale prima di `lab finish`): il check grada il segnale persistente che resta comunque (es. `manage-configure` grada le `ClusterRoleBinding` orfane rimaste dopo la cancellazione dei ManagedClusterSet, `policies-deploy` grada il certificato TLS rinnovato invece della Policy transitoria che lo studente cancella allo step 7). `observability-customize` e i tre esercizi di virtualizzazione sono check **"sul momento"**, validi solo prima di `lab finish` (la guida cancella l'intera stack/i progetti a fine esercizio).
+
+`install-rhacm` è un caso opposto: l'installazione di RHACM non viene rimossa da nessun `finish()` successivo (resta infrastruttura condivisa per tutto il corso), quindi il check resta valido anche a lunga distanza da quell'esercizio, non solo "sul momento".
+
+Esercizio guidato DO432 **senza** grading ufficiale né custom (non gradabile in modo oggettivo): `manage-lifecycle` (2.2) — la guida importa poi scollega (`detach`) il managed cluster prima di `lab finish` (e `start()` lo lascia già scollegato), quindi lo stato finale è indistinguibile da "esercizio non svolto" — stesso giudizio di `containers-podman` in RH134.
+
 ## Aggiungere il grading per un nuovo esercizio
 
 1. Crea `~/.local/share/lab-custom-grading/<nome-esercizio>.py` (o direttamente in `lab-custom-grading/` in questo repo).

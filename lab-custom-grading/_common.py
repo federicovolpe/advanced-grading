@@ -6,6 +6,7 @@ da dettagli indentati di 8 spazi) e' compatibile con il parser di
 """
 
 import json
+import os
 import subprocess
 
 
@@ -57,6 +58,73 @@ def oc_get_json(*args):
 def project_exists(name):
     result = subprocess.run(["oc", "get", "project", name], capture_output=True)
     return result.returncode == 0
+
+
+# --- Helper per DO432 (RHACM - multicluster management): il corso governa
+# DUE cluster OpenShift distinti, hub e "managed" (managed-cluster). La
+# sessione oc corrente dello studente puo' essere loggata sull'uno o
+# sull'altro in un dato momento (la guida alterna `oc login` fra i due), per
+# cui `oc_get_json`/`project_exists` (sopra) non bastano per un grading
+# affidabile. Ogni modulo ufficiale, in start(), chiama
+# use_ocp4_cluster_step()/use_ocp4_mng_cluster_step() (rht_labs_acm.rhacm),
+# che scaricano da `utility` e mettono in cache due kubeconfig separati, gia'
+# autenticati come cluster-admin, indipendenti dalla sessione oc corrente
+# dello studente: usiamo direttamente quelli con --kubeconfig, cosi' il
+# grading e' deterministico a prescindere da dove sia loggato lo studente.
+HUB_KUBECONFIG = os.path.expanduser("~/.auth/ocp4-kubeconfig")
+MANAGED_KUBECONFIG = os.path.expanduser("~/.auth/ocp4-mng-kubeconfig")
+
+
+def oc_get_json_kc(kubeconfig, *args):
+    """Come oc_get_json, ma contro un cluster specifico (kubeconfig
+    esplicito, es. HUB_KUBECONFIG o MANAGED_KUBECONFIG) invece della sessione
+    oc attiva. Usala direttamente solo quando il kubeconfig e' una variabile
+    (es. un loop sui due cluster) — nel caso comune preferisci
+    oc_get_json_hub/oc_get_json_managed sotto."""
+    if not os.path.exists(kubeconfig):
+        return None
+    result = subprocess.run(
+        ["oc", f"--kubeconfig={kubeconfig}", "get", *args, "-o", "json"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def oc_get_json_hub(*args):
+    """Come oc_get_json, ma sempre contro l'hub cluster RHACM (vedi
+    commento sopra)."""
+    return oc_get_json_kc(HUB_KUBECONFIG, *args)
+
+
+def oc_get_json_managed(*args):
+    """Come oc_get_json_hub, ma contro il managed cluster."""
+    return oc_get_json_kc(MANAGED_KUBECONFIG, *args)
+
+
+def project_exists_hub(name):
+    return oc_get_json_hub("project", name) is not None
+
+
+def project_exists_managed(name):
+    return oc_get_json_managed("project", name) is not None
+
+
+def condition_true(obj, condition_type):
+    """True se obj (risorsa RHOCP/RHACM decodificata da oc_get_json*) ha una
+    condizione status.conditions con quel `type` e status "True". Usato per
+    CR con lo schema conditions standard di Kubernetes (es. ManagedCluster:
+    tipi "ManagedClusterJoined"/"ManagedClusterConditionAvailable")."""
+    if not obj:
+        return False
+    for cond in (obj.get("status") or {}).get("conditions", []) or []:
+        if cond.get("type") == condition_type:
+            return cond.get("status") == "True"
+    return False
 
 
 # --- Helper per corsi RHCSA (RH124/RH134): niente OpenShift, i controlli
