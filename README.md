@@ -4,9 +4,9 @@ Strumenti nati per il corso Red Hat **DO180 (Red Hat OpenShift Administration
 I)**, ma il meccanismo è generico: qualunque corso eseguito con lo stesso tool
 `lab` (rpm `lab-service`) può avere script di grading custom aggiunti qui
 (vedi [CLAUDE.md](CLAUDE.md) per estenderlo ad altri corsi). Oggi il repo
-copre anche **DO280 (Red Hat OpenShift Administration II)**, **RH124 (Red
-Hat System Administration I)** e **RH134 (Red Hat System Administration
-II)**. Risolvono due problemi:
+copre anche **DO280 (Red Hat OpenShift Administration II)**, **DO380 (Red
+Hat OpenShift Administration III)**, **RH124 (Red Hat System Administration
+I)** e **RH134 (Red Hat System Administration II)**. Risolvono due problemi:
 
 1. **Nessun feedback visivo dopo `lab start`.** Un monitor grafico (Tkinter) si apre automaticamente e mostra, come una fila di semafori, l'esito di `lab grade` aggiornato periodicamente.
 2. **Molte guided exercise non hanno un `lab grade` ufficiale.** Un wrapper attorno al comando `lab` intercetta la risposta `"The grade command is not supported for this lab."` e, se esiste, esegue al suo posto uno script di grading "custom" scritto per quell'esercizio specifico.
@@ -121,6 +121,26 @@ Tutte le 19 guided exercise del corso che non hanno un `lab grade` ufficiale son
 - Cap. 8 Application Security: `appsec-scc`, `appsec-api`, `appsec-prune`
 
 Scritti a partire dal testo integrale della guida studente (PDF ufficiale DO280-RHOCP4.18-en-1-20251205) incrociato con `materials/labs`/`materials/solutions` del pacchetto `rht-labs-do280`, quando presenti. Alcuni esercizi non avevano alcun materiale in cache (`packaged-charts`, `auth-rbac`, `selfservice-quotas`, `selfservice-ranges`, `appsec-scc`): i relativi script si basano solo sul testo della guida, e alcuni dettagli non documentati con precisione (es. valori CPU non menzionati in `selfservice-ranges`) sono stati volutamente omessi invece di essere inventati — vedi i commenti in testa a ciascun file. `appsec-prune.py` documenta una discrepanza reale trovata fra `materials/solutions/appsec-prune/rbac-prune.yaml` e il testo della guida (percorso RBAC diverso): è stato seguito il testo della guida, più affidabile.
+
+### DO380 (Red Hat OpenShift Administration III)
+
+Tutte le 17 guided exercise del corso che non hanno un `lab grade` ufficiale sono coperte (le 8 "review" di fine capitolo e la comprehensive review hanno già un `lab grade` ufficiale, non toccate):
+
+- Cap. 1 Authentication and Identity Management: `auth-ldap`, `auth-sync`, `auth-oidc`, `auth-conflict`, `auth-tls`
+- Cap. 2 Backup, Restore, and Migration of Applications with OADP: `backup-export`, `backup-oadp`, `backup-restore`
+- Cap. 3 Pod Scheduling: `scheduling-selector`, `scheduling-pdb`
+- Cap. 4 OpenShift GitOps: `gitops-admin`, `gitops-app`
+- Cap. 5 OpenShift Monitoring: `monitoring-alerts`
+- Cap. 6 Logging for Red Hat OpenShift: `logging-forward`, `logging-central`
+- Cap. 7 Cluster Partitioning: `nodes-mco`, `nodes-operators`
+
+Scritti a partire dal testo integrale della guida studente (PDF ufficiale DO380-RHOCP4.18-en-2-20260525) incrociato con `materials/labs`/`materials/solutions` del pacchetto `do380` (installato con `lab install do380`, senza mai eseguire `lab start` durante l'analisi). La maggior parte degli esercizi aveva una cartella `materials/solutions` completa e non ambigua (ogni placeholder `CHANGE_ME` ha un solo valore plausibile), usata come specifica primaria; per `auth-ldap`, `auth-tls`, `monitoring-alerts` e `monitoring-cluster`, privi di `materials/solutions`, si è seguito solo il testo della guida. Alcuni script notano esplicitamente valori intenzionalmente non gradati perché non specificati con precisione in nessuna fonte (es. gli attributi `id`/`name`/`preferredUsername` dell'IdP LDAP in `auth-ldap`, o il contenuto del backup su PVC in `gitops-app`).
+
+`auth-sync.py` documenta una discrepanza reale fra `materials/solutions/auth-sync/` (che usa un namespace `auth-group-sync` mai citato né creato da alcun comando nel testo) e la guida ufficiale: è stato seguito il testo della guida, più affidabile, come già fatto per `appsec-prune` in DO280.
+
+`auth-tls.py` e `scheduling-selector.py` (per il taint su worker01/worker03) sono check **"sul momento"**, validi solo prima di `lab finish` (vedi CLAUDE.md sez.2): la guida lascia deliberatamente una CRON job attiva e un taint applicato fino alla fine dell'esercizio.
+
+Esercizi guidati DO380 **senza** grading ufficiale né custom (non gradabili in modo oggettivo): `intro-monitor` (non è referenziato da nessun capitolo della guida in questa edizione del corso — il modulo ufficiale crea e cancella solo un progetto vuoto, nessuno stato da verificare) e `monitoring-cluster` (Cap. 5.2: l'intera guided exercise è un'attività di sola lettura tramite dashboard web console e query Prometheus per diagnosticare un'app e un nodo NotReady preconfigurati da `start()` — nessuna modifica richiesta allo studente, nessuno stato univoco verificabile via `oc`).
 
 ### RH124 (Red Hat System Administration I)
 
