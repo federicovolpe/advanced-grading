@@ -333,3 +333,53 @@ def oc_logs(name, namespace, tail=None):
     if result.returncode != 0:
         return ""
     return result.stdout
+
+
+# --- Helper per corsi OpenShift "developer" (DO288): quasi tutto e' oc, ma
+# alcuni esercizi usano anche Helm e Kustomize (letture/render, mai comandi
+# che modificano il cluster dallo script di grading stesso).
+
+
+def helm_get_json(*args, namespace=None):
+    """Esegue `helm <args> -o json [-n <namespace>]` e ritorna il dict/list
+    decodificato, o None se il comando fallisce (release non trovata, ecc.)."""
+    cmd = ["helm", *args, "-o", "json"]
+    if namespace:
+        cmd += ["-n", namespace]
+    result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    try:
+        return json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return None
+
+
+def oc_kustomize_docs(path):
+    """Esegue `oc kustomize <path>` (render locale, non tocca il cluster) e
+    ritorna la lista dei manifest YAML come dict. Lista vuota se il comando
+    fallisce o la cartella non esiste."""
+    import yaml
+
+    result = subprocess.run(["oc", "kustomize", path], capture_output=True, text=True)
+    if result.returncode != 0:
+        return []
+    try:
+        return [doc for doc in yaml.safe_load_all(result.stdout) if doc]
+    except yaml.YAMLError:
+        return []
+
+
+def http_get_json(url, timeout=5):
+    """Come http_get, ma decodifica il body come JSON: utile per gli esercizi
+    DO288 (deploy-cli, deploy-console, ecc.) le cui app di esempio esposte
+    tramite Route rispondono con un payload REST. Ritorna (ok, dict/list o
+    None): ok e' True solo se la richiesta HTTP ha successo E il body e' JSON
+    valido."""
+    ok, body = http_get(url, timeout=timeout)
+    if not ok:
+        return False, None
+    try:
+        return True, json.loads(body)
+    except json.JSONDecodeError:
+        return False, None
