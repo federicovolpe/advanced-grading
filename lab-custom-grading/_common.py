@@ -451,3 +451,79 @@ def http_get_json(url, timeout=5):
         return True, json.loads(body)
     except json.JSONDecodeError:
         return False, None
+
+
+# --- Helper per corsi AI (AI267/AI0014L-AI0022L su OpenShift AI - RHOAI):
+# a differenza di DO180, `start()` qui copia i materiali dell'esercizio (che
+# lo studente completa riempiendo dei TODO) sulla workstation locale in
+# ~/course/labs/<nome-esercizio>/ (vedi labs.utils.fs.copy_materials_step),
+# NON dentro il cluster. Molti esercizi vanno quindi gradati leggendo questi
+# file locali, oltre alle risorse OpenShift AI (Notebook, InferenceService,
+# DataSciencePipeline, ecc. - tutte CRD, quindi oc_get_json funziona anche
+# per queste senza bisogno di helper dedicati).
+
+WORKDIR_DEFAULT = os.path.expanduser("~/course")
+
+
+def get_workdir():
+    """Ritorna la workdir dei materiali corso (default ~/course), leggendo
+    l'eventuale override in ~/.grading/config.yaml (chiave 'workdir'), cosi'
+    come fa labs.core.config.settings()."""
+    config_path = os.path.expanduser("~/.grading/config.yaml")
+    try:
+        import yaml
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+        workdir = config.get("workdir")
+        if workdir:
+            return os.path.expanduser(workdir)
+    except (OSError, ImportError, yaml.YAMLError):
+        pass
+    return WORKDIR_DEFAULT
+
+
+def lab_materials_dir(lab_name, kind="labs"):
+    """Ritorna il path locale dei materiali di un esercizio copiati da
+    `lab start` (kind='labs' per lo starter, 'solutions' per la soluzione
+    ufficiale, usata solo per i test manuali, mai nel grading)."""
+    return os.path.join(get_workdir(), kind, lab_name)
+
+
+def read_text_file(path):
+    """Ritorna il contenuto di un file come stringa, o None se non esiste
+    o non e' leggibile."""
+    try:
+        with open(path) as f:
+            return f.read()
+    except OSError:
+        return None
+
+
+def parse_env_file(path):
+    """Fa il parsing minimale di un file .env (KEY=VALUE per riga, ignora
+    commenti/righe vuote, rimuove virgolette). Ritorna {} se il file non
+    esiste. Non usa python-dotenv (non sempre disponibile) perche' il
+    formato che ci serve gradare e' semplicissimo."""
+    content = read_text_file(path)
+    if content is None:
+        return {}
+    result = {}
+    for line in content.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        result[key.strip()] = value.strip().strip('"').strip("'")
+    return result
+
+
+def get_route_host(name, namespace):
+    """Ritorna lo spec.host di una Route OpenShift, o None se non esiste.
+    Preferire questa funzione a un dominio hardcoded quando si verifica che
+    un file di configurazione dello studente (es. .env) punti all'endpoint
+    giusto: il dominio della classroom (apps.<...>) puo' variare, il nome di
+    Route/namespace no."""
+    route = oc_get_json("route", name, "-n", namespace)
+    if not route:
+        return None
+    return (route.get("spec") or {}).get("host")
