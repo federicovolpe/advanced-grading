@@ -539,6 +539,32 @@ def parse_env_file(path):
     return result
 
 
+def oc_whoami_token():
+    """Ritorna il token dell'utente oc attualmente loggato (lo stesso
+    usato dallo studente per autenticarsi contro TrustyAI/KServe), o None."""
+    result = subprocess.run(["oc", "whoami", "-t"], capture_output=True, text=True)
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip()
+
+
+def http_get_json_auth(url, token, timeout=10):
+    """Come http_get_json, ma con un Authorization: Bearer <token> header e
+    senza validare il certificato TLS (serve per le route della classroom,
+    es. il servizio TrustyAI, che richiedono un token di autenticazione)."""
+    result = subprocess.run(
+        ["curl", "-fsSk", "--max-time", str(timeout),
+         "-H", f"Authorization: Bearer {token}", url],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return False, None
+    try:
+        return True, json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return False, None
+
+
 def get_route_host(name, namespace):
     """Ritorna lo spec.host di una Route OpenShift, o None se non esiste.
     Preferire questa funzione a un dominio hardcoded quando si verifica che
