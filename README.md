@@ -227,6 +227,96 @@ Diversi esercizi fanno un "giro completo" (creano poi cancellano la risorsa prin
 
 Esercizio guidato DO432 **senza** grading ufficiale né custom (non gradabile in modo oggettivo): `manage-lifecycle` (2.2) — la guida importa poi scollega (`detach`) il managed cluster prima di `lab finish` (e `start()` lo lascia già scollegato), quindi lo stato finale è indistinguibile da "esercizio non svolto" — stesso giudizio di `containers-podman` in RH134.
 
+### AI267 (Developing and Deploying AI/ML Applications on Red Hat OpenShift AI)
+
+Primo corso non-DO180 coperto che non gira su OpenShift "puro": è basato su
+Red Hat OpenShift AI (RHOAI). Il meccanismo `lab`/`_common.py` resta
+identico, ma il corso stesso è molto diverso da DO180: è la compilation di
+9 sotto-pacchetti installati separatamente (`ai0014l`..`ai0022l`, uno per
+modulo), **nessuno dei 27 esercizi ha un `lab grade` ufficiale**, e molti
+esercizi fanno modificare allo studente file Python locali copiati da `lab
+start` in `~/course/labs/<esercizio>/` (non solo risorse sul cluster) —
+`_common.py` guadagna `get_workdir`/`lab_materials_dir`/`parse_env_file`
+per questo, oltre a `get_route_host`, `skopeo_inspect_auth`,
+`oc_whoami_token`/`http_get_json_auth` (per interrogare API autenticate
+come quella di TrustyAI).
+
+19 dei 27 esercizi sono coperti:
+
+- Cap. 1 Introduction to Red Hat OpenShift AI: `intro-projects`
+- Cap. 2 Using Workbenches: `workbench-creating`, `workbench-connections`, `workbench-working`, `workbench-custom`
+- Cap. 3 Fundamentals of Model Serving: `serving-catalog`, `serving-modelregistry`, `serving-vllm`
+- Cap. 4 Serving Predictive AI Models: `serving-openvino`, `serving-custom`
+- Cap. 5 Monitoring AI Models: `monitoring-bias`, `monitoring-drift`, `monitoring-performance`
+- Cap. 6 Introduction to AI Pipelines: `dspa-intro`, `dspa-elyra`, `dspa-kubeflow`
+- Cap. 7 Advanced AI Pipelines: `dspa-containers`, `dspa-artifacts`, `dspa-config`, `dspa-experiments`
+- Cap. 8 Gen AI Model Optimization and Evaluation: `model-evaljob`
+- Cap. 9 Building GenAI Applications: `genai-app`, `genai-rag`, `genai-agentic`, `genai-guardrails`
+
+I primi 11 (`genai-*`, `dspa-kubeflow/artifacts/config/containers`,
+`model-evaljob`, `serving-custom`) sono stati scritti a partire da
+`materials/solutions/` o da un `resources.yaml`/manifest con valori esatti
+già presenti in cache, seguendo l'ordine di preferenza del CLAUDE.md. Per i
+restanti (workbench-*, `intro-projects`, `serving-catalog`/
+`serving-modelregistry`/`serving-vllm`/`serving-openvino`, `monitoring-*`,
+`dspa-intro`/`dspa-elyra`) non esisteva alcuna `materials/solutions` né un
+manifest con valori sufficienti: sono stati completati/scritti dopo che
+l'utente ha fornito il testo integrale della guida studente (PDF ufficiale
+AI267-RHOAI3.3-en-2-20260702), che ha anche rivelato dettagli mancanti in
+uno script già scritto solo dal codice (`dspa-kubeflow`, corretto — vedi
+sotto). `dspa-intro` e `workbench-custom` sono stati invece derivati da un
+indizio deterministico nel codice di `start()`/`finish()` (assenza di
+`create_dspa_step`, nome immagine cercato da `finish()` per la pulizia)
+senza bisogno della guida.
+
+Diversi script fanno affidamento su un fatto verificato sul cluster reale
+di questa classe: **KFP v2 su RHOAI esegue le pipeline run come Argo
+Workflow indipendentemente dal `pipelineStore`** configurato sul DSPA
+(`database` o `kubernetes`), quindi cercare `workflows.argoproj.io` con
+nome che inizia per `<nome-pipeline>-` e `status.phase=Succeeded` è un
+segnale affidabile di run riuscita per qualunque esercizio basato su
+pipeline (`dspa-kubeflow/artifacts/config/containers/experiments`,
+`dspa-elyra`). `dspa-kubeflow` in particolare va oltre la prima run
+riuscita — richiede anche il passaggio del DSPA a `pipelineStore:
+kubernetes` e la creazione delle risorse Kubernetes-native `Pipeline`/
+`PipelineVersion` — dettaglio assente dal solo confronto labs/solutions e
+aggiunto solo dopo aver letto la guida.
+
+Per `monitoring-bias`/`monitoring-drift` il "compito" dello studente non
+crea una risorsa Kubernetes ma configura il servizio TrustyAI via la sua
+API REST (`POST .../metrics/.../request` per programmare una metrica
+ricorrente): il grading interroga dal vivo `GET .../requests` con lo stesso
+token dell'utente `oc` loggato. `monitoring-performance` legge invece
+direttamente i contatori Prometheus esposti dagli endpoint `/metrics`
+pubblici dei serving runtime (nessuna risorsa Kubernetes da controllare, lo
+"stato" è che lo studente abbia effettivamente inviato richieste di
+inferenza).
+
+`workbench-working` è un check **"sul momento"**, valido solo prima di `lab
+finish`: verifica che il pod `model-training` abbia subito un vero
+`OOMKilled` (`lastState.terminated.reason`) e sia di nuovo `Running` — la
+guida fa deliberatamente esaurire la memoria al workbench come parte
+dell'esercizio, poi lo fa correggere.
+
+Quasi tutti gli script di questo corso sono stati testati end-to-end contro
+un cluster RHOAI reale (namespace/risorse temporanee, poi rimosse; per gli
+esercizi che richiedono login `developer` è stato chiesto all'utente di
+eseguire `oc login` per via delle restrizioni del classificatore di
+sicurezza sui comandi di login). Eccezioni documentate nei singoli file:
+`workbench-connections` (non verificato l'aggancio delle connection al
+workbench), `workbench-custom` (non verificato il caso PASS con
+un'immagine realmente pushata), `serving-vllm` (Route di test non riuscita
+a creare durante il test, logica comunque condivisa con altri script già
+verificati).
+
+Esercizi guidati AI267 **senza** grading ufficiale né custom (non gradabili
+in modo oggettivo, dopo aver letto la guida): `model-eval` (Cap. 8.4 —
+confronta l'accuracy originale vs INT8-quantizzata leggendo solo l'output
+di due celle di un notebook, nessuno stato persistito fuori dal kernel del
+notebook) e `model-compression` (Cap. 8.2 — stesso schema: confronto
+dimensione/qualità nell'output delle celle, nessun artefatto salvato su
+storage persistente o risorsa Kubernetes).
+
 ## Aggiungere il grading per un nuovo esercizio
 
 1. Crea `~/.local/share/lab-custom-grading/<nome-esercizio>.py` (o direttamente in `lab-custom-grading/` in questo repo).
