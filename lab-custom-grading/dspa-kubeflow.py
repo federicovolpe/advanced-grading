@@ -15,6 +15,19 @@ via `oc get workflows.argoproj.io` anche se Pipeline/PipelineVersion non
 sono CR native. Il nome del Workflow e' sempre <nome-pipeline>-<suffisso>,
 dove <nome-pipeline> e' quello passato a @dsl.pipeline(name=...) (qui
 'sentiment-analysis').
+
+Dal testo della guida studente (non solo dal codice), l'esercizio prosegue
+oltre la prima run riuscita:
+- Lo studente lancia prima una run con threshold=0.99 (fallisce apposta),
+  poi corregge a threshold=0.5 e rilancia (successo) - per questo il check
+  sulla run riuscita accetta qualunque run 'sentiment-analysis-*', non
+  necessariamente la prima.
+- Lo studente passa il DSPA 'dspa' a pipelineStore=kubernetes con `oc patch`,
+  poi ricompila la pipeline in formato manifest Kubernetes-nativo e la
+  applica, creando le risorse Pipeline 'sentiment-analysis' e PipelineVersion
+  'sentiment-analysis-v3' (pipelines.pipelines.kubeflow.org). Questi due
+  passaggi sono verificati qui perche' sono l'ultima parte esplicita
+  dell'esercizio, con nomi di risorsa fissi dati dalla guida.
 """
 import sys
 import os
@@ -24,6 +37,8 @@ from _common import GradingStep, oc_get_json, project_exists, lab_materials_dir,
 
 LAB_NAME = "dspa-kubeflow"
 PIPELINE_NAME = "sentiment-analysis"
+PIPELINE_VERSION_NAME = "sentiment-analysis-v3"
+DSPA_NAME = "dspa"
 
 
 def main():
@@ -66,6 +81,30 @@ def main():
                     f"Nessuna run di '{PIPELINE_NAME}' e' completata con successo "
                     f"(stati trovati: {sorted(p for p in phases if p)})"
                 )
+
+    with GradingStep(f"Il DSPA '{DSPA_NAME}' usa pipelineStore=kubernetes") as step:
+        dspa = oc_get_json("datasciencepipelinesapplication", DSPA_NAME, "-n", project)
+        if not dspa:
+            step.fail(f"DataSciencePipelinesApplication '{DSPA_NAME}' non trovata")
+        else:
+            store = dspa.get("spec", {}).get("apiServer", {}).get("pipelineStore")
+            if store != "kubernetes":
+                step.add_error(
+                    f"spec.apiServer.pipelineStore e' '{store}', atteso 'kubernetes' "
+                    "(oc patch dspa dspa --type=merge -p "
+                    "'{\"spec\":{\"apiServer\":{\"pipelineStore\":\"kubernetes\"}}}')"
+                )
+
+    with GradingStep(
+        f"La Pipeline '{PIPELINE_NAME}' e la PipelineVersion '{PIPELINE_VERSION_NAME}' "
+        "sono state create come risorse Kubernetes"
+    ) as step:
+        if not oc_get_json("pipelines.pipelines.kubeflow.org", PIPELINE_NAME, "-n", project):
+            step.add_error(f"Pipeline '{PIPELINE_NAME}' non trovata")
+        if not oc_get_json(
+            "pipelineversions.pipelines.kubeflow.org", PIPELINE_VERSION_NAME, "-n", project
+        ):
+            step.add_error(f"PipelineVersion '{PIPELINE_VERSION_NAME}' non trovata")
 
 
 if __name__ == "__main__":
