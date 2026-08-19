@@ -391,6 +391,28 @@ def skopeo_inspect(image_ref, tls_verify=True, timeout=15):
         return True, None
 
 
+def skopeo_inspect_auth(image_ref, username, password, tls_verify=True, timeout=15):
+    """Come skopeo_inspect, ma CON credenziali: serve per i corsi RHOAI
+    (es. AI0015L/workbench-custom) dove lo studente builda e pusha
+    un'immagine custom sul registry della classroom
+    (registry.lab.example.com:8443), che richiede autenticazione anche in
+    lettura. Non usare per verificare immagini che devono essere pubbliche
+    (in quel caso usa skopeo_inspect, senza credenziali)."""
+    args = [
+        "skopeo", "inspect", f"docker://{image_ref}",
+        "--creds", f"{username}:{password}",
+    ]
+    if not tls_verify:
+        args.append("--tls-verify=false")
+    result = subprocess.run(args, capture_output=True, text=True, timeout=timeout)
+    if result.returncode != 0:
+        return False, None
+    try:
+        return True, json.loads(result.stdout)
+    except json.JSONDecodeError:
+        return True, None
+
+
 def oc_logs(name, namespace, tail=None):
     """Esegue `oc logs <name> -n <namespace>` e ritorna lo stdout (stringa), o
     "" se il comando fallisce (pod non trovato, non ancora pronto, ecc.)."""
