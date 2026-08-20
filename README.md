@@ -97,7 +97,7 @@ Questo formato (`PASS`/`FAIL <titolo>` + dettagli indentati di 8 spazi) è compa
 Script di grading scritti (in `lab-custom-grading/`):
 
 - `reliability-probes`, `reliability-requests`, `reliability-limits`, `reliability-autoscaling`
-- `deploy-newapp`, `deploy-services`
+- `deploy-newapp`, `deploy-services`, `deploy-routes`
 - `storage-statefulsets`, `storage-volumes`, `storage-configs`
 - `updates-rollout`, `updates-triggers`, `updates-imagestreams`
 - `intro-navigate`, `pods-troubleshooting`
@@ -105,7 +105,9 @@ Script di grading scritti (in `lab-custom-grading/`):
 
 **Nota**: alcuni script sono stati scritti senza accesso al testo ufficiale della guida studente, basandosi solo su file di partenza/soluzione presenti in cache e su `resources.txt`. Quando il testo della guida è stato poi fornito (es. `reliability-autoscaling`, `pods-troubleshooting`, `pods-containers`), gli script sono stati raffinati/corretti con i valori esatti. Se noti un FAIL su un lavoro che ritieni corretto, probabilmente lo script va tarato meglio — apri una issue o modifica direttamente il file.
 
-Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato — nemmeno temporaneo — univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-routes`, `deploy-workloads`, `intro-monitor`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`. **Da riverificare con il testo della guida** (lo stesso errore di giudizio di `pods-containers` — dedotto senza leggere il manuale — potrebbe valere anche per alcuni di questi).
+Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato — nemmeno temporaneo — univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-workloads`, `intro-monitor`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`. **Da riverificare con il testo della guida** (lo stesso errore di giudizio di `pods-containers` — dedotto senza leggere il manuale — potrebbe valere anche per alcuni di questi).
+
+`deploy-routes.py` e' un caso particolare: nessuna `materials/solutions` ne' `resources.txt`, ma il modulo ufficiale (`start()`) usa un progetto diverso dal nome esercizio (`web-applications`) e verifica la disponibilita' dell'immagine `redhattraining/do180-httpd-app:v1`; il file di partenza `index.php` incluso in quell'immagine stampa un testo fisso e verificabile via HTTP. Verificato dal vivo contro il cluster reale di questa classe: lo studente espone due app con quell'immagine, una con una Route diretta (`oc expose`) e una tramite una risorsa Ingress — il grading cerca entrambe per caratteristiche (Route generata o no da un Ingress + contenuto HTTP atteso), non per nome fisso, dato che i nomi di app/service/route sono a scelta dello studente.
 
 ### DO280 (Red Hat OpenShift Administration II)
 
