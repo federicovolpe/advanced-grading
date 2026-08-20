@@ -317,6 +317,72 @@ notebook) e `model-compression` (Cap. 8.2 — stesso schema: confronto
 dimensione/qualità nell'output delle celle, nessun artefatto salvato su
 storage persistente o risorsa Kubernetes).
 
+### AU294 (Red Hat Enterprise Linux Automation with Ansible)
+
+Primo corso coperto puramente Ansible/RHCSA-style (niente OpenShift): un
+control node `workstation` più host gestiti `servera`..`serverf` e
+`utility.lab.example.com` (Gitea + registry), tutti raggiungibili via SSH
+senza password. Ogni guided exercise crea sulla workstation una directory
+locale `/home/student/<nome-esercizio>/` con i file di partenza (progetto
+VS Code/devcontainer); `_common.py` (funzioni `run`/`command_ok`/
+`user_exists`/`package_installed`/ecc., già generiche da RH124/RH134) non ha
+richiesto alcuna modifica.
+
+Il pacchetto del corso è la compilation di 9 sotto-pacchetti pip
+(`au0018l`, `au0020l`..`au0027l`, uno per capitolo, installati con
+`lab install <sku>`), tutti installati e ispezionati per questo lavoro. Le
+11 guided exercise di fine capitolo/comprehensive review (`*-review`,
+`comprehensive-review1`-`4`) hanno già un `lab grade` ufficiale — non
+toccate. Delle restanti 26, **25 sono coperte**:
+
+- Cap. 1 An Introduction to Ansible: `intro-devenv`, `intro-configure`
+- Cap. 2 Developing Automation Content — Basics: `develop-inventory`, `develop-singleplay`, `develop-multiplay`, `develop-troubleshoot`
+- Cap. 3 Developing Automation Content: Variables: `variables-vars`, `variables-facts`, `variables-vault`
+- Cap. 4 Implementing Task Control: `control-flow`, `control-handlers`, `control-errors`
+- Cap. 5 Transferring Files: `files-manage`, `files-templates`
+- Cap. 6 Reusing Ansible Code: `scale-files`, `scale-hosts`
+- Cap. 7 Simplifying Playbooks with Roles: `roles-create`, `roles-external`, `roles-collections`
+- Cap. 8 Automating Linux Administration Tasks: `system-roles`, `system-software`, `system-user`, `system-process`, `system-storage`, `system-network`
+
+Scritti a partire dal testo integrale della guida studente (PDF ufficiale
+AU294-RHAAP2.5-en-4-20260312, fornito dall'utente in `~/Downloads/`)
+incrociato con `materials/labs/<esercizio>/solutions/` del pacchetto pip
+(quasi tutti gli esercizi ne hanno una, a differenza di RH124/RH134: qui la
+diff labs→solutions è stata la fonte primaria quasi ovunque, per la
+metodologia CLAUDE.md). Molti script sono stati testati end-to-end contro
+l'ambiente reale di questa classe (servera/serverb/serverc/serverd
+raggiungibili in questa sessione): soluzione ufficiale applicata
+temporaneamente, verificato PASS, poi ripristinato lo stato precedente.
+Eccezioni prudenziali documentate nei singoli file: `system-storage` e
+`system-network` (Cap. 8.10/8.12) non sono stati testati dal vivo per non
+rischiare di rompere storage/rete condivisi in modo difficile da annullare;
+`files-manage` (Cap. 5.2, vsftpd) non è stato testato dal vivo per lo stesso
+motivo (creazione utente/servizio reali).
+
+`files-manage` è un caso di **collisione di nome fra corsi** (vedi
+CLAUDE.md sez. 6): RH124 ha già un esercizio "files-manage" (organizzazione
+file multimediali su servera, sez. 7.2) completamente diverso da quello
+AU294 (automazione FTP con vsftpd, sez. 5.2). Il wrapper cerca lo script
+per solo nome esercizio senza distinguere il corso, quindi
+`lab-custom-grading/files-manage.py` è un **dispatcher**: legge il
+`course_sku` registrato per l'esercizio in `~/.grading/lab_manifest.json`
+(scritto dal tool `lab` all'installazione del corso, quindi autoritativo su
+questa macchina) e delega alla logica del corso effettivamente installato.
+
+Alcuni esercizi riusano lo stesso Ansible System Role in punti diversi del
+curriculum con scopo diverso (es. `redhat.rhel_system_roles.timesync` sia in
+`roles-collections`, Cap. 7.8, introduttivo, sia in `system-roles`, Cap. 8.2,
+più esteso con timezone per-host): non è una duplicazione di file, sono
+esercizi/pacchetti pip distinti, intenzionale nella progressione didattica
+del corso.
+
+Esercizio guidato AU294 **senza** grading ufficiale né custom (non
+gradabile in modo oggettivo): `test-gitea` (Cap. 1, pacchetto `au0018l`) —
+non compare nel testo della guida studente (nessuna sezione/numero
+associato): il modulo ufficiale si limita a creare e poi cancellare un repo
+Gitea di test ("Test repo for testing"), senza alcun compito assegnato allo
+studente né stato persistente attribuibile a un suo intervento.
+
 ## Aggiungere il grading per un nuovo esercizio
 
 1. Crea `~/.local/share/lab-custom-grading/<nome-esercizio>.py` (o direttamente in `lab-custom-grading/` in questo repo).
