@@ -336,12 +336,12 @@ Il pacchetto del corso è la compilation di 9 sotto-pacchetti pip
 toccate. Delle restanti 26, **25 sono coperte**:
 
 - Cap. 1 An Introduction to Ansible: `intro-devenv`, `intro-configure`
-- Cap. 2 Developing Automation Content — Basics: `develop-inventory`, `develop-singleplay`, `develop-multiplay`, `develop-troubleshoot`
+- Cap. 2 Introduction to Developing Automation Content: `develop-inventory`, `develop-singleplay`, `develop-multiplay`, `develop-troubleshoot`
 - Cap. 3 Developing Automation Content: Variables: `variables-vars`, `variables-facts`, `variables-vault`
-- Cap. 4 Implementing Task Control: `control-flow`, `control-handlers`, `control-errors`
-- Cap. 5 Transferring Files: `files-manage`, `files-templates`
-- Cap. 6 Reusing Ansible Code: `scale-files`, `scale-hosts`
-- Cap. 7 Simplifying Playbooks with Roles: `roles-create`, `roles-external`, `roles-collections`
+- Cap. 4 Developing Automation Content: Task Control: `control-flow`, `control-handlers`, `control-errors`
+- Cap. 5 Developing Automation Content: Deploying Files: `files-manage`, `files-templates`
+- Cap. 6 Developing Automation Content at Scale: `scale-files`, `scale-hosts`
+- Cap. 7 Reusing Code with Ansible Roles and Content Collections: `roles-create`, `roles-external`, `roles-collections`
 - Cap. 8 Automating Linux Administration Tasks: `system-roles`, `system-software`, `system-user`, `system-process`, `system-storage`, `system-network`
 
 Scritti a partire dal testo integrale della guida studente (PDF ufficiale
@@ -349,15 +349,28 @@ AU294-RHAAP2.5-en-4-20260312, fornito dall'utente in `~/Downloads/`)
 incrociato con `materials/labs/<esercizio>/solutions/` del pacchetto pip
 (quasi tutti gli esercizi ne hanno una, a differenza di RH124/RH134: qui la
 diff labs→solutions è stata la fonte primaria quasi ovunque, per la
-metodologia CLAUDE.md). Molti script sono stati testati end-to-end contro
-l'ambiente reale di questa classe (servera/serverb/serverc/serverd
-raggiungibili in questa sessione): soluzione ufficiale applicata
-temporaneamente, verificato PASS, poi ripristinato lo stato precedente.
-Eccezioni prudenziali documentate nei singoli file: `system-storage` e
-`system-network` (Cap. 8.10/8.12) non sono stati testati dal vivo per non
-rischiare di rompere storage/rete condivisi in modo difficile da annullare;
-`files-manage` (Cap. 5.2, vsftpd) non è stato testato dal vivo per lo stesso
-motivo (creazione utente/servizio reali).
+metodologia CLAUDE.md). L'ambiente di questa classe era realmente
+raggiungibile durante la scrittura (servera/serverb/serverc/serverd via SSH
+senza password), il che ha permesso di testare **alcuni** script
+end-to-end: `develop-inventory`, `develop-singleplay`, `develop-multiplay`,
+`develop-troubleshoot`, `control-flow`, `scale-hosts` e `files-templates`
+sono stati verificati applicando temporaneamente la soluzione ufficiale,
+confermando PASS, e ripristinando poi lo stato precedente (o, per
+`variables-vars`/`variables-vault`, verificando dal vivo in sola lettura lo
+stato *prima* dell'esercizio — utile a scoprire due falsi positivi reali:
+cockpit/firewalld e la CA della classroom risultavano già preconfigurati
+sull'immagine base, quindi non sono stati gradati). Per gli altri script
+(compresi tutti e sei quelli del Cap. 8 tranne le verifiche di base, i tre
+di `roles-*`, `control-handlers`, `control-errors`, `scale-files` e la parte
+AU294 di `files-manage`) ci si è fermati all'analisi statica
+(materials/solutions + testo guida) o a verifiche dal vivo puramente
+READ-ONLY: applicare per intero la soluzione avrebbe richiesto installare
+pacchetti, creare utenti o modificare storage/rete/firewall su host
+condivisi con altri esercizi in corso in parallelo, con un rischio di stato
+residuo non banale da annullare in sicurezza (per `system-storage` e
+`system-network` in particolare, anche il rischio di perdere la
+raggiungibilità SSH). Ogni file documenta nel proprio docstring se e come è
+stato verificato.
 
 `files-manage` è un caso di **collisione di nome fra corsi** (vedi
 CLAUDE.md sez. 6): RH124 ha già un esercizio "files-manage" (organizzazione
