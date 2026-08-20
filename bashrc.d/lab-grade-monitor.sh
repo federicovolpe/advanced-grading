@@ -23,11 +23,19 @@ _lab_grade_with_custom_fallback() {
     status=$?
     printf '%s\n' "$output"
 
-    if [[ -n "$lab_name" && "$output" == *"The grade command is not supported for this lab."* ]]; then
+    # Fallback sul grading custom non solo quando l'ufficiale risponde
+    # letteralmente "The grade command is not supported for this lab.", ma
+    # ogni volta che non produce nessun check PASS/FAIL reale: capita anche
+    # per un blip transitorio del comando ufficiale (es. subito dopo 'lab
+    # start', cluster/progetto non ancora del tutto pronti) che restituisce
+    # solo il banner "Running: ..." e nient'altro, senza quella stringa
+    # esatta — in quel caso lo script custom (se esiste) resta comunque la
+    # fonte di verita' migliore disponibile.
+    if [[ -n "$lab_name" ]] && ! grep -qE '^(PASS|FAIL) ' <<<"$output"; then
         local custom="$HOME/.local/share/lab-custom-grading/${lab_name}.py"
         if [[ -f "$custom" ]]; then
             echo
-            echo "🔧 Grading ufficiale non disponibile per '${lab_name}': eseguo lo script di grading personalizzato..."
+            echo "🔧 Grading ufficiale non disponibile o incompleto per '${lab_name}': eseguo lo script di grading personalizzato..."
             python3 "$custom" "$lab_name"
             return $?
         fi
