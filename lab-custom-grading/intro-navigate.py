@@ -4,29 +4,57 @@ Grading "custom" per l'esercizio guidato intro-navigate, sprovvisto di
 `lab grade` ufficiale (la classe IntroNavigate nel pacchetto do180
 implementa solo start()/finish(), non grade()).
 
-A differenza di altre guided exercise di questo corso, intro-navigate non
-copia dei file "starter" in ~/DO180/labs/intro-navigate (quella cartella
-non esiste nemmeno): start() si limita a (1) cancellare un eventuale
-progetto residuo intro-navigate e (2) creare/popolare, tramite l'API di
-GitLab, un repository git.ocp4.example.com/developer/intro-navigate.git
-con il contenuto di materials/solutions/intro-navigate (un'app Spring Boot
-con devfile.yaml + deploy.yaml). A differenza di intro-monitor (che invece
-chiama ocp_project.create_project_dev_access_step per creare il progetto
-per lo studente), qui il progetto NON viene pre-creato: e' lo studente a
-doverlo creare e a importare quel repository dalla Developer perspective
-della console web ("+Add" -> "Import from Git"), esplorando cosi' la
-console (Topology, build, pod, log, terminal, ecc.).
+Come in versione precedente, start() non copia file "starter" in
+~/DO180/labs/intro-navigate (quella cartella non esiste): si limita a (1)
+cancellare un eventuale progetto residuo intro-navigate e (2) popolare,
+tramite l'API di GitLab, un repository
+git.lab.example.com/developer/intro-navigate.git col contenuto di
+materials/solutions/intro-navigate/intro-navigate (il sample ufficiale
+devfile-sample-java-springboot-basic: devfile.yaml + Dockerfile +
+deploy.yaml). E' lo studente a dover creare il progetto "intro-navigate" e
+importare quel repository dalla Developer perspective ("+Add" -> "Import
+from Git"), esplorando cosi' la console (Topology, Deployments, Services,
+Routes, Pods, poi la Administrator perspective per Operators/Nodes/eventi).
 
-Il devfile.yaml della soluzione applica letteralmente deploy.yaml come
-componente "kubernetes-deploy": quel manifest (non un template, nomi e
-valori fissi) e' percio' la specifica oggettiva di cio' che deve risultare
-nel cluster una volta completato l'esercizio:
-  - Deployment "my-java-springboot" con un container sulla porta 8081 e
-    resources.requests cpu=10m/memory=180Mi, con il pod Ready.
-  - Service "my-java-springboot-svc" che espone la porta 8081.
-Questo script verifica solo questo (l'esito osservabile dell'importazione
-dell'app), non il modo in cui lo studente ha navigato la console (che non
-e' verificabile via API).
+RISCRITTO per RHOCP 4.22 / RHEL10: la sezione del manuale attuale (estratta
+dal PDF corso) e' esplicita e ripetuta piu' volte sui nomi delle risorse
+create dall'importazione, ed e' DIVERSA da quanto lo script precedente
+assumeva:
+
+  - 4.3 "the Topology page ... intro-navigate-git-app application"
+  - 5.1/5.2 "the intro-navigate-git deployment"
+  - 6.5 "Click intro-navigate-git to view the deployment details"
+  - 7.1 "Networking > Services and click intro-navigate-git ..."
+  - 7.2 "Networking > Routes and click intro-navigate-git ..."
+
+Lo stesso nome base "intro-navigate-git" ricorre identico per Deployment,
+Service E Route: e' la convenzione standard della console OpenShift per
+"Import from Git" (suffisso "-git" aggiunto al nome del repository per il
+componente creato, application grouping "<nome>-git-app"), NON i nomi
+letterali "my-java-springboot"/"my-java-springboot-svc" del manifest
+deploy.yaml del devfile. Il devfile.yaml del sample e' infatti quello
+ufficiale devfile.io (vedi il suo README.md, che descrive il flusso
+generico "outerloop" del devfile), e i valori nei suoi attributi
+"deployment/cpuRequest: 10m", "deployment/memoryRequest: 180Mi",
+"deployment/container-port: 8081" corrispondono esattamente ai campi
+"Resource Limits"/porta che la console popola in automatico nel form di
+Import from Devfile per generare IL SUO PROPRIO Deployment (con nome preso
+dal campo "Name" del wizard, di default "<repo>-git"), non un'applicazione
+letterale del manifest deploy.yaml. Per questo qui si verifica il
+Deployment/Service/Route con nome "intro-navigate-git" (non piu'
+"my-java-springboot"/"-svc"), ma si mantengono gli stessi valori attesi per
+porta/cpu/memory del container, che restano quelli del devfile.
+
+Aggiunta rispetto alla versione precedente: un check sulla Route, dato che
+il manuale attuale la cita esplicitamente (punto 7.2) come parte del
+percorso di verifica delle risorse create per l'app di esempio (Outcomes:
+"Examine the resources that are created for the sample application").
+
+Non gradato (non verificabile via API, o non richiesto in modo oggettivo):
+la navigazione stessa della console (Operators, Nodes, Pods/Deployments a
+livello di intero cluster nella Administrator perspective, punti 9.x) e il
+login come utente admin — sono esplorazione pura, senza stato risultante
+distinguibile da quello di un cluster su cui lo studente non ha fatto nulla.
 
 Uso: intro-navigate.py [nome-progetto]   (default: intro-navigate)
 """
@@ -39,8 +67,9 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import GradingStep, oc_get_json, project_exists
 
 LAB_NAME = "intro-navigate"
-DEPLOYMENT_NAME = "my-java-springboot"
-SERVICE_NAME = "my-java-springboot-svc"
+# Nome base condiviso da Deployment/Service/Route: convenzione della console
+# OpenShift per "Import from Git" ("<repo>-git"), vedi docstring sopra.
+RESOURCE_NAME = "intro-navigate-git"
 EXPECTED_PORT = 8081
 EXPECTED_CPU_REQUEST = "10m"
 EXPECTED_MEMORY_REQUEST = "180Mi"
@@ -68,10 +97,11 @@ def parse_quantity(value):
 
 
 def get_container(deployment):
+    """Ritorna il primo container del pod template. Il nome del container
+    generato dalla console per un'importazione da Git non e' documentato dal
+    manuale (a differenza del nome del Deployment stesso): non lo si
+    assume, si prende semplicemente l'unico container presente."""
     containers = deployment["spec"]["template"]["spec"]["containers"]
-    for c in containers:
-        if c.get("name") == "my-java-springboot":
-            return c
     return containers[0] if containers else None
 
 
@@ -94,14 +124,14 @@ def main():
         if not project_exists(project):
             step.fail(f"Progetto '{project}' non trovato")
 
-    deployment = oc_get_json("deployment", DEPLOYMENT_NAME, "-n", project)
+    deployment = oc_get_json("deployment", RESOURCE_NAME, "-n", project)
     container = None
 
     with GradingStep(
-        f"Il deployment {DEPLOYMENT_NAME} (app importata da Git) esiste ed e' pronto"
+        f"Il deployment {RESOURCE_NAME} (app importata da Git) esiste ed e' pronto"
     ) as step:
         if deployment is None:
-            step.fail(f"Deployment '{DEPLOYMENT_NAME}' non trovato nel progetto")
+            step.fail(f"Deployment '{RESOURCE_NAME}' non trovato nel progetto")
         else:
             container = get_container(deployment)
             if container is None:
@@ -109,7 +139,7 @@ def main():
             ready = deployment.get("status", {}).get("readyReplicas", 0)
             if not ready:
                 step.add_error(
-                    f"Nessuna replica pronta per il deployment '{DEPLOYMENT_NAME}' "
+                    f"Nessuna replica pronta per il deployment '{RESOURCE_NAME}' "
                     "(il pod non e' Running/Ready)"
                 )
 
@@ -132,17 +162,30 @@ def main():
             check_quantity(step, "resources.requests.cpu", requests.get("cpu"), EXPECTED_CPU_REQUEST)
             check_quantity(step, "resources.requests.memory", requests.get("memory"), EXPECTED_MEMORY_REQUEST)
 
-    service = oc_get_json("service", SERVICE_NAME, "-n", project)
+    service = oc_get_json("service", RESOURCE_NAME, "-n", project)
 
-    with GradingStep(f"Il service {SERVICE_NAME} espone la porta {EXPECTED_PORT}") as step:
+    with GradingStep(f"Il service {RESOURCE_NAME} espone la porta {EXPECTED_PORT}") as step:
         if service is None:
-            step.fail(f"Service '{SERVICE_NAME}' non trovato nel progetto")
+            step.fail(f"Service '{RESOURCE_NAME}' non trovato nel progetto")
         else:
             ports = [p.get("port") for p in service.get("spec", {}).get("ports", [])]
             if EXPECTED_PORT not in ports:
                 step.add_error(
-                    f"Il Service '{SERVICE_NAME}' non espone la porta {EXPECTED_PORT} "
+                    f"Il Service '{RESOURCE_NAME}' non espone la porta {EXPECTED_PORT} "
                     f"(porte trovate: {ports})"
+                )
+
+    route = oc_get_json("route", RESOURCE_NAME, "-n", project)
+
+    with GradingStep(f"La route {RESOURCE_NAME} espone il service") as step:
+        if route is None:
+            step.fail(f"Route '{RESOURCE_NAME}' non trovata nel progetto")
+        else:
+            to = route.get("spec", {}).get("to", {})
+            if to.get("kind") != "Service" or to.get("name") != RESOURCE_NAME:
+                step.add_error(
+                    f"La route non punta al service '{RESOURCE_NAME}' "
+                    f"(spec.to trovato: {to})"
                 )
 
 

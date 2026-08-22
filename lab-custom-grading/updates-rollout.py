@@ -7,30 +7,50 @@ implementa solo start()/finish(), non grade()).
 L'esercizio non ha una cartella materials/solutions (e' un esercizio guidato
 puramente imperativo: lo studente esegue una sequenza di comandi `oc set env`
 / `oc set image` su due deployment gia' distribuiti da start(), db.yaml e
-web.yaml). Il riferimento allo stato finale atteso e' il file
-DO180/materials/labs/updates-rollout/resources.txt, che elenca in ordine i
+web.yaml). Il riferimento allo stato finale atteso e' il manuale ufficiale
+(sezione 7.4, DO180-RHOCP4.22) insieme a
+materials/labs/updates-rollout/resources.txt, che elencano in ordine i
 comandi che lo studente deve eseguire:
 
   oc set env deployment/mydb MYSQL_PASSWORD=redhat123
-  oc set image deployment/mydb mysql-80=.../rhel9/mysql-80:1-228
+  oc set image deployment/mydb mariadb-118=.../rhel10/mariadb-118:1784149182
   oc set image deployment/version versioned-hello=.../versioned-hello:v1.1
+  oc rollout undo deployment/version
+
+Nella versione RHOCP4.22/RHEL10 del corso il database e' passato da un
+container MySQL ("mysql-80") a un container MariaDB RHEL10 ("mariadb-118",
+immagine rhel10/mariadb-118, tag numerico timestamp anziche' "1-NNN"): la
+versione precedente di questo script gradava ancora container "mysql-80" e
+tag "1-228", che non esistono piu' in db.yaml (vedi
+do180/exercises/updates_rollout.py: check_images_exist elenca
+"rhel10/mariadb-118:1783945307"/"...:1784149182", e
+materials/labs/updates-rollout/lab-start/db.yaml usa
+name: mariadb-118 / image: .../rhel10/mariadb-118:1783945307).
 
 Questo script verifica quindi lo stato live dei due deployment nei due
 progetti creati da start() (updates-rollout-db e updates-rollout-web,
-vedi do180/updates-rollout.py: project_db/project_web = __LAB__ + "-db"/"-web"):
+vedi do180/exercises/updates_rollout.py: project_db/project_web = LAB + "-db"/"-web"):
 
   - deployment/mydb (progetto -db): env MYSQL_PASSWORD aggiornata a
-    "redhat123" e immagine del container mysql-80 aggiornata al tag 1-228
-    (era 1-224 in db.yaml).
-  - deployment/version (progetto -web): immagine del container
-    versioned-hello aggiornata al tag v1.1 (era v1.0 in web.yaml), e il
-    rollout e' andato a buon fine (tutte le 10 repliche pronte e aggiornate),
-    a conferma che la readinessProbe configurata in web.yaml ha permesso un
-    rolling update corretto.
+    "redhat123" e immagine del container mariadb-118 aggiornata al tag
+    1784149182 (era 1783945307 in db.yaml).
+  - deployment/version (progetto -web): il Punto 9 della guida ("Roll back
+    the version deployment") e' l'ULTIMO passo prima di "Finish" e chiede
+    esplicitamente `oc rollout undo deployment/version` (senza
+    --to-revision, quindi torna alla revisione precedente), confermato al
+    punto 9.3 dove il ReplicaSet iniziale risale a 10/10/10 e quello v1.1
+    scende a 0/0/0. Lo stato finale corretto e' quindi immagine
+    versioned-hello:v1.0 (non v1.1: quel tag e' solo lo stato INTERMEDIO,
+    verificato ai punti 5-8 prima del rollback, non quello che deve
+    risultare a fine esercizio). Un primo tentativo di questo script gradava
+    v1.1 come stato finale: chi completava l'esercizio fino in fondo,
+    rollback incluso, riceveva FAIL, mentre chi si fermava prima del
+    rollback riceveva PASS — logica invertita, corretta qui.
 
-Non vengono gradati i passaggi puramente di introspezione (query mysql,
-lettura immagine del pod/replicaset, lettura della readinessProbe) perche'
-non cambiano stato e non sono verificabili a posteriori.
+Non vengono gradati i passaggi puramente di introspezione (query mariadb,
+lettura immagine del pod/replicaset, lettura della readinessProbe, pausa/
+ripresa del rollout) perche' non cambiano stato persistente e non sono
+verificabili a posteriori: solo lo stato FINALE dei due deployment conta.
 
 Uso: updates-rollout.py [nome-progetto-base]   (default: updates-rollout)
 Il nome-progetto-base viene usato per derivare i due progetti "<base>-db" e
@@ -46,13 +66,17 @@ from _common import GradingStep, oc_get_json, project_exists
 LAB_NAME = "updates-rollout"
 
 DB_DEPLOYMENT = "mydb"
-DB_CONTAINER = "mysql-80"
-EXPECTED_DB_IMAGE_TAG = "mysql-80:1-228"
+DB_CONTAINER = "mariadb-118"
+EXPECTED_DB_IMAGE_TAG = "mariadb-118:1784149182"
 EXPECTED_DB_ENV = {"MYSQL_PASSWORD": "redhat123"}
 
 WEB_DEPLOYMENT = "version"
 WEB_CONTAINER = "versioned-hello"
-EXPECTED_WEB_IMAGE_TAG = "versioned-hello:v1.1"
+# Stato FINALE atteso a fine esercizio: v1.0, non v1.1 — il Punto 9 della
+# guida ("Roll back the version deployment") e' l'ultimo passo prima di
+# "Finish" e riporta il deployment a v1.0 con 'oc rollout undo'. v1.1 e'
+# solo lo stato intermedio verificato ai punti 5-8, prima del rollback.
+EXPECTED_WEB_IMAGE_TAG = "versioned-hello:v1.0"
 
 
 def get_container(deployment, name):
@@ -110,7 +134,7 @@ def main():
         else:
             check_env(db_container, EXPECTED_DB_ENV, step)
 
-    with GradingStep("L'immagine del database e' stata aggiornata al tag 1-228") as step:
+    with GradingStep("L'immagine del database e' stata aggiornata al tag 1784149182") as step:
         if db_container is None:
             step.fail()
         else:
@@ -127,13 +151,13 @@ def main():
             if web_container is None:
                 step.fail("Nessun container trovato nel deployment")
 
-    with GradingStep("L'immagine dell'applicazione web e' stata aggiornata al tag v1.1") as step:
+    with GradingStep("L'applicazione web e' stata riportata al tag v1.0 (rollback finale)") as step:
         if web_container is None:
             step.fail()
         else:
             check_image_tag(web_container, EXPECTED_WEB_IMAGE_TAG, step)
 
-    with GradingStep("Il rolling update del deployment version e' andato a buon fine") as step:
+    with GradingStep("Il rollback del deployment version e' andato a buon fine") as step:
         if web_deployment is None:
             step.fail()
         else:

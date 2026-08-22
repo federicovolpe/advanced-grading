@@ -4,13 +4,15 @@ Grading "custom" per l'esercizio guidato pods-troubleshooting, sprovvisto di
 `lab grade` ufficiale (la classe PodsTroubleshooting nel pacchetto do180
 implementa solo start()/finish(), non grade()).
 
-Basato sul testo della guida ufficiale dello studente (DO180, Chapter 3,
-"Troubleshoot Containers and Pods"): lo studente crea un pod "mysql-server"
-che parte con un tag immagine rotto (rhel9/mysql-80:1228, inesistente),
-diagnostica l'errore con oc logs/oc get events/skopeo inspect, lo corregge a
-rhel9/mysql-80:1-228 con oc edit, poi carica world_x.sql nel database
-"world" (SOURCE /tmp/world_x.sql), popolando le tabelle city/country/
-countryinfo/countrylanguage.
+Basato sul testo della guida ufficiale dello studente (DO180-RHOCP4.22-en-1,
+Chapter 3, "Troubleshoot Containers and Pods"): lo studente crea un pod
+"mariadb-server" che parte con un tag immagine rotto e inesistente
+(rhel10/mariadb-118:1784040404), diagnostica l'errore con oc logs/oc get
+events/skopeo inspect, lo corregge con oc edit al tag funzionante
+1784149182 (confermato anche in start(), che verifica l'esistenza dei tag
+"1784149182", "1783945307", "latest" per rhel10/mariadb-118), poi carica
+world_x.sql nel database "world" (SOURCE /tmp/world_x.sql), popolando le
+tabelle city/country/countryinfo/countrylanguage.
 
 Uso: pods-troubleshooting.py [nome-progetto]   (default: pods-troubleshooting)
 """
@@ -23,8 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import GradingStep, oc_get_json, project_exists
 
 LAB_NAME = "pods-troubleshooting"
-POD_NAME = "mysql-server"
-EXPECTED_IMAGE = "registry.ocp4.example.com:8443/rhel9/mysql-80:1-228"
+POD_NAME = "mariadb-server"
+EXPECTED_IMAGE = "registry.lab.example.com:8443/rhel10/mariadb-118:1784149182"
 EXPECTED_ENV = {
     "MYSQL_USER": "redhat",
     "MYSQL_PASSWORD": "redhat123",
@@ -52,11 +54,13 @@ def check_env(container, step):
 def query_tables(project):
     """Esegue SHOW TABLES FROM world dentro il pod (sola lettura, nessuna
     modifica allo stato del cluster) e ritorna l'insieme dei nomi di
-    tabella, o None se la query fallisce."""
+    tabella, o None se la query fallisce. L'immagine rhel10/mariadb-118
+    fornisce il client come `mariadb` (non piu' `mysql`, come mostra la
+    guida al passo 5.4)."""
     result = subprocess.run(
         [
             "oc", "exec", f"pod/{POD_NAME}", "-n", project, "--",
-            "mysql", "-u", EXPECTED_ENV["MYSQL_USER"],
+            "mariadb", "-u", EXPECTED_ENV["MYSQL_USER"],
             f"-p{EXPECTED_ENV['MYSQL_PASSWORD']}",
             "-N", "-e", "SHOW TABLES FROM world;",
         ],
@@ -93,7 +97,7 @@ def main():
             if container is None:
                 step.add_error("Nessun container trovato nel pod")
 
-    with GradingStep(f"Il pod {POD_NAME} usa l'immagine corretta (tag 1-228)") as step:
+    with GradingStep(f"Il pod {POD_NAME} usa l'immagine corretta (tag 1784149182)") as step:
         if container is None:
             step.fail()
         elif container.get("image") != EXPECTED_IMAGE:
@@ -114,7 +118,7 @@ def main():
             tables = query_tables(project)
             if tables is None:
                 step.add_error(
-                    "Impossibile eseguire la query nel pod (mysql non raggiungibile "
+                    "Impossibile eseguire la query nel pod (mariadb non raggiungibile "
                     "o credenziali errate)"
                 )
             elif not EXPECTED_TABLES.issubset(tables):

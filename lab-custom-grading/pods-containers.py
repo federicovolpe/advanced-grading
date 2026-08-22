@@ -7,8 +7,8 @@ implementa solo start()/finish(), non grade() - vedi do180/pods-containers.py).
 IMPORTANTE - questo e' un check "sul momento", non a posteriori: quasi tutti
 i pod creati durante l'esercizio (ubi9-user x2, ubi9-date) vengono
 esplicitamente cancellati dallo studente passo per passo (guida DO180,
-Capitolo 3.2, pag. 159-166). L'UNICO stato che sopravvive fino alla fine
-dell'esercizio e' il pod `ubi9-command`: il punto 8.2 della guida chiede
+Capitolo 3.2, pag. 168-176). L'UNICO stato che sopravvive fino alla fine
+dell'esercizio e' il pod `ubi9-command`: il punto 8.4 della guida chiede
 esplicitamente di confermare "the pod is still running" prima di lanciare
 `lab finish pods-containers` (che cancella l'intero progetto). Quindi:
 - questo script da' un risultato SOLO se eseguito PRIMA di `lab finish`,
@@ -50,7 +50,7 @@ def main():
     pod = oc_get_json("pod", EXPECTED_POD, "-n", project)
 
     with GradingStep(
-        f"Il pod '{EXPECTED_POD}' e' in esecuzione (punto 8.2 della guida)"
+        f"Il pod '{EXPECTED_POD}' e' in esecuzione (punto 8.4 della guida)"
     ) as step:
         if pod is None:
             step.fail(

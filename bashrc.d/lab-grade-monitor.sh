@@ -82,10 +82,12 @@ lab() {
         return $status
     fi
 
-    # Evita finestre duplicate se il monitor per questo lab e' gia' attivo.
-    if pgrep -f "lab_grade_monitor\.py ${lab_name}\b" >/dev/null 2>&1; then
-        return $status
-    fi
+    # Un solo esercizio per volta: chiudi qualunque finestra di grading
+    # gia' aperta (di un esercizio precedente, o anche di questo stesso se
+    # e' un 'lab start' di reset) prima di aprirne una nuova, altrimenti
+    # restano finestre vecchie in giro a mostrare lo stato di un altro
+    # esercizio (o uno stato pre-reset, ormai stale).
+    pkill -f "lab_grade_monitor\.py " >/dev/null 2>&1
 
     nohup python3 "$HOME/.local/bin/lab_grade_monitor.py" "$lab_name" >/dev/null 2>&1 &
     disown
