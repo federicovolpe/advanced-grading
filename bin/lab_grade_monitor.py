@@ -6,12 +6,26 @@ Uso:
     ./lab_grade_monitor.py <nome-lab> [--interval SECONDI] [--host user@host]
 
 Lancia periodicamente `lab grade <nome-lab>` (in locale o via ssh se --host
-e' specificato), parsa l'output in singoli check PASS/FAIL e li mostra come
-semafori in una finestrella sempre in primo piano. Passa il mouse su un
-semaforo per vedere titolo e dettagli del check.
+e' specificato) e mostra i check come semafori in una finestrella sempre in
+primo piano. Passa il mouse su un semaforo per vedere titolo e dettagli del
+check.
+
+Fonte dei check, in ordine di preferenza:
+1. ~/.grading/grade_results.jsonl — log strutturato scritto dal pacchetto
+   ufficiale `labs` (rht-labs-cli) ad ogni `lab grade`, indipendentemente da
+   come quella run renderizza l'output a schermo (testo "PASS"/"FAIL",
+   simboli colorati "check-mark"/"cross-mark" con spinner, o altro ancora in
+   futuro). E' la fonte piu' robusta: quando presente e non vuota, e' quella
+   usata.
+2. Fallback: regex sull'output testuale grezzo di 'lab grade' (stdout+stderr)
+   — usato quando il JSONL manca (versione di 'labs' senza grading_log) o
+   quando il check-list e' vuoto (es. grade() non implementato per l'esercizio
+   -> lo script di grading custom, invocato dal wrapper bash, stampa comunque
+   "PASS <titolo>"/"FAIL <titolo>" in quel formato testuale).
 """
 
 import argparse
+import json
 import re
 import shlex
 import subprocess
@@ -19,6 +33,8 @@ import threading
 import time
 import tkinter as tk
 from datetime import datetime
+
+JSON_MARKER = "__LAB_GRADE_MONITOR_JSON_TAIL__"
 
 CHECK_RE = re.compile(r"^(PASS|FAIL)\s+(.+?)\s*$")
 # CSI generico (ECMA-48): ESC [ <param 0x30-0x3F>* <intermediate 0x20-0x2F>* <final 0x40-0x7E>
@@ -63,6 +79,29 @@ def parse_lab_grade_output(text):
     if current:
         checks.append(current)
     return checks
+
+
+def parse_grade_result_jsonl(line):
+    """Converte l'ultima riga di grade_results.jsonl per questo lab in una
+    lista di check {status, title, details}, o None se assente/vuota/non
+    valida (in quel caso il chiamante ricade sul parsing testuale)."""
+    if not line:
+        return None
+    try:
+        record = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    checks = record.get("checks") or []
+    if not checks:
+        return None
+    return [
+        {
+            "status": "PASS" if c.get("result") in ("PASS", "SUCCESS") else "FAIL",
+            "title": c.get("name", "(check senza nome)"),
+            "details": list(c.get("secondary_messages") or []),
+        }
+        for c in checks
+    ]
 
 
 class Tooltip:
@@ -158,9 +197,16 @@ class LabGradeMonitor:
         # `lab()`) invece di invocare direttamente il binario `lab`: cosi'
         # il fallback sul grading custom (~/.local/share/lab-custom-grading/)
         # scatta anche da qui, non solo lanciando `lab grade` a mano.
+        # Dopo 'lab grade', stampiamo un marcatore seguito dall'ultima riga di
+        # grade_results.jsonl per questo lab (se esiste): e' il log
+        # strutturato scritto dal pacchetto ufficiale 'labs', indipendente dal
+        # formato con cui quella run ha renderizzato l'output a schermo.
+        grep_pattern = shlex.quote(f'"lab_name": "{self.lab_name}"')
         shell_cmd = (
             "source ~/.bashrc.d/lab-grade-monitor.sh 2>/dev/null; "
-            f"lab grade {shlex.quote(self.lab_name)}"
+            f"lab grade {shlex.quote(self.lab_name)}; "
+            f"printf '\\n{JSON_MARKER}\\n'; "
+            f"grep -F {grep_pattern} ~/.grading/grade_results.jsonl 2>/dev/null | tail -n1"
         )
         if self.host:
             cmd = ["ssh", self.host, shell_cmd]
@@ -175,7 +221,12 @@ class LabGradeMonitor:
             # fallimento anticipato (es. VM non ancora pronte appena dopo
             # 'lab start') finiscono su stderr, o viceversa.
             output = result.stdout + result.stderr
-            checks = parse_lab_grade_output(output)
+            grade_text, _, json_tail = output.partition(JSON_MARKER)
+            json_line = json_tail.strip().splitlines()[-1] if json_tail.strip() else None
+            checks = parse_grade_result_jsonl(json_line)
+            if checks is None:
+                checks = parse_lab_grade_output(grade_text)
+            output = grade_text
             error = None
         except Exception as exc:
             output = ""

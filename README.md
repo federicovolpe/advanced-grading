@@ -82,7 +82,20 @@ FAIL Titolo del check
         - messaggio specifico
 ```
 
-Questo formato (`PASS`/`FAIL <titolo>` + dettagli indentati di 8 spazi) è compatibile con il parser di `lab_grade_monitor.py`, quindi i risultati appaiono correttamente anche come semafori nella finestra grafica.
+Questo formato (`PASS`/`FAIL <titolo>` + dettagli indentati di 8 spazi) è compatibile con il parser testuale di `lab_grade_monitor.py`, usato solo come fallback (vedi sotto), quindi i risultati appaiono correttamente anche come semafori nella finestra grafica.
+
+**Fonte primaria dei check nel monitor grafico**: quando l'esercizio ha un
+`grade()` ufficiale, `lab_grade_monitor.py` legge i risultati da
+`~/.grading/grade_results.jsonl` (log strutturato scritto dal pacchetto
+`labs` ad ogni `lab grade`, un JSON per riga con `lab_name`/`checks`),
+**non** facendo il parsing testuale dell'output a schermo. Questo evita che
+il monitor si rompa ogni volta che quell'output cambia forma (es. testo
+`PASS`/`FAIL`, oppure simboli colorati ✓/✗ con spinner, come nei laboratori
+`*-review`) — bug reale riscontrato e corretto su `deploy-review`. Il parser
+testuale (`parse_lab_grade_output`, quello compatibile col formato sopra)
+resta solo come fallback per gli esercizi senza `grade()` ufficiale, dove il
+wrapper esegue lo script di grading custom e quello **non** scrive nel
+JSONL.
 
 `_common.py` fornisce inoltre:
 - `oc_get_json(*args)` — esegue `oc get <args> -o json` e ritorna il dict Python, o `None` se la risorsa non esiste. (OpenShift/DO180)

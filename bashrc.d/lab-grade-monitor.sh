@@ -36,7 +36,7 @@ _lab_grade_with_custom_fallback() {
         if [[ -f "$custom" ]]; then
             echo
             echo "🔧 Grading ufficiale non disponibile o incompleto per '${lab_name}': eseguo lo script di grading personalizzato..."
-            python3 "$custom" "$lab_name"
+            python3 "$custom"
             return $?
         fi
     fi

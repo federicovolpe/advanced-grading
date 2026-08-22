@@ -16,11 +16,22 @@ i 24 esercizi DO180 già presenti in `lab-custom-grading/`.
 
 Il meccanismo di fallback (`~/.bashrc.d/lab-grade-monitor.sh`, installato da
 `install.sh`) è già generico e funziona per qualunque corso senza modifiche:
-intercetta `lab grade <nome-esercizio>`, e se il comando ufficiale risponde
-`"The grade command is not supported for this lab."`, cerca
-`~/.local/share/lab-custom-grading/<nome-esercizio>.py` e lo esegue. Per
-contribuire un nuovo corso basta AGGIUNGERE file in `lab-custom-grading/`,
-non modificare nient'altro.
+intercetta `lab grade <nome-esercizio>` e scatta ogni volta che l'output
+ufficiale non contiene almeno una riga `PASS `/`FAIL ` (non solo quando
+risponde letteralmente `"The grade command is not supported for this lab."`
+— quella stringa resta un caso particolare, ma capita anche che il comando
+ufficiale non produca nessun check reale per altri motivi, es. subito dopo
+`lab start` con cluster/progetto non ancora pronto, vedi commit `bb86d48`).
+In quel caso cerca `~/.local/share/lab-custom-grading/<nome-esercizio>.py` e
+lo esegue. Per contribuire un nuovo corso basta AGGIUNGERE file in
+`lab-custom-grading/`, non modificare nient'altro.
+
+**Dopo QUALUNQUE modifica a `bashrc.d/lab-grade-monitor.sh` o
+`bin/lab_grade_monitor.py` in questo repo, rilancia sempre
+`bash install.sh`** per propagarla all'ambiente attivo (`~/.bashrc.d/`,
+`~/.local/bin/`). Il repo è solo la sorgente — l'ambiente live non si
+aggiorna da solo, e un fix scritto solo qui ma mai installato è
+indistinguibile, per lo studente, dal bug non essere mai stato risolto.
 
 ## 1. Trova il materiale del corso
 
@@ -143,7 +154,15 @@ Convenzioni da rispettare sempre:
 - **Nome file** = nome esatto dell'esercizio, cioè quello che si passa a
   `lab start`/`lab grade` (es. `pods-troubleshooting.py`).
 - Primo argomento da CLI opzionale per il nome del progetto, default = nome
-  esercizio.
+  esercizio (o il nome progetto reale se diverso, vedi punto sotto). Il
+  wrapper (`bashrc.d/lab-grade-monitor.sh`) invoca lo script SENZA
+  argomenti apposta, per lasciare vincere questo default — l'argomento
+  serve solo per test manuali (`python3 script.py altro-progetto`). Se lo
+  script definisce `PROJECT` diverso da `LAB_NAME` (es. `deploy-routes` →
+  `web-applications`) e il wrapper passasse comunque `lab_name`, quel
+  default verrebbe sovrascritto col nome sbagliato e il check fallirebbe
+  sempre con "progetto non trovato" (bug reale corretto una volta, vedi
+  fix nel commit che rimuove `"$lab_name"` dalla chiamata).
 - Dentro un `GradingStep`, usa `step.add_error(msg)` per un dettaglio
   specifico o `step.fail(msg)` quando l'intero check non ha senso proseguire
   (es. risorsa base assente). All'uscita dal blocco viene stampato
