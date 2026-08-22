@@ -26,13 +26,14 @@ Fonte dei check, in ordine di preferenza:
 
 import argparse
 import json
+import queue
 import re
 import shlex
 import subprocess
 import threading
 import time
 import tkinter as tk
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 JSON_MARKER = "__LAB_GRADE_MONITOR_JSON_TAIL__"
 
@@ -81,16 +82,35 @@ def parse_lab_grade_output(text):
     return checks
 
 
-def parse_grade_result_jsonl(line):
+def parse_grade_result_jsonl(line, not_before=None):
     """Converte l'ultima riga di grade_results.jsonl per questo lab in una
     lista di check {status, title, details}, o None se assente/vuota/non
-    valida (in quel caso il chiamante ricade sul parsing testuale)."""
+    valida/non abbastanza recente (in quel caso il chiamante ricade sul
+    parsing testuale).
+
+    'grep | tail -n1' su un file append-only prende l'ultima riga per quel
+    nome-lab MAI SCRITTA, non necessariamente quella di questa esecuzione:
+    se 'lab grade' fallisce prima ancora di scrivere (es. subito dopo un
+    reset con 'lab start', progetto ricreato da poco e non ancora pronto),
+    non lascia nessuna riga nuova, e senza questo controllo si ripescherebbe
+    per sbaglio un risultato vecchio (magari tutto PASS da prima del reset)
+    spacciandolo per quello attuale. 'not_before' e' l'istante catturato
+    subito prima di lanciare 'lab grade': una riga con timestamp precedente
+    non puo' appartenere a questa esecuzione ed è quindi scartata.
+    """
     if not line:
         return None
     try:
         record = json.loads(line)
     except json.JSONDecodeError:
         return None
+    if not_before is not None:
+        try:
+            record_time = datetime.fromisoformat(record["timestamp"])
+        except (KeyError, ValueError):
+            return None
+        if record_time < not_before:
+            return None
     checks = record.get("checks") or []
     if not checks:
         return None
@@ -156,6 +176,17 @@ class LabGradeMonitor:
         self.running = True
         self.last_run = None
         self.last_raw_output = ""
+        # Tk/Tcl non e' thread-safe: il thread di _run_grade non deve MAI
+        # chiamare direttamente metodi di self.root (nemmeno .after()). Passa
+        # il risultato attraverso questa coda thread-safe; solo il polling
+        # nel thread principale (_poll_queue, sotto) tocca la GUI. Prima di
+        # questa fix, _run_grade chiamava self.root.after(...) da un thread
+        # in background: funzionava quasi sempre, ma dopo diversi cicli di
+        # polling capitava che un aggiornamento restasse "impigliato" nella
+        # coda eventi di Tcl senza errori visibili (stderr va a /dev/null
+        # sotto nohup) e la finestra restava bloccata su uno stato vecchio
+        # anche premendo "Aggiorna ora".
+        self.result_queue = queue.Queue()
 
         root.title(f"lab grade — {lab_name}")
         root.attributes("-topmost", True)
@@ -183,11 +214,30 @@ class LabGradeMonitor:
         self.status_label.pack(fill="x", padx=10, pady=(0, 8))
 
         root.protocol("WM_DELETE_WINDOW", self.on_close)
+        # Un solo avvio: la catena periodica prosegue da sola, perche'
+        # _on_grade_done richiama schedule_next() ad ogni completamento.
+        # Chiamare anche schedule_next() qui creava una SECONDA catena
+        # indipendente in parallelo (bug preesistente): ogni ciclo finiva
+        # per lanciare due 'lab grade' quasi in contemporanea, e le due
+        # catene aggiornavano la GUI in corsa tra loro.
         self.run_grade_async()
-        self.schedule_next()
+        self.root.after(100, self._poll_queue)
 
     def schedule_next(self):
         self.root.after(self.interval * 1000, self.run_grade_async)
+
+    def _poll_queue(self):
+        # Unico punto in cui i risultati calcolati in background raggiungono
+        # la GUI: gira sempre sul thread principale (richiamato via
+        # self.root.after), quindi puo' toccare i widget in sicurezza.
+        try:
+            while True:
+                checks, error, output = self.result_queue.get_nowait()
+                self._on_grade_done(checks, error, output)
+        except queue.Empty:
+            pass
+        if self.running:
+            self.root.after(100, self._poll_queue)
 
     def run_grade_async(self):
         threading.Thread(target=self._run_grade, daemon=True).start()
@@ -213,6 +263,12 @@ class LabGradeMonitor:
         else:
             cmd = ["bash", "-c", shell_cmd]
         try:
+            # Catturato appena prima di lanciare 'lab grade': una riga del
+            # JSONL piu' vecchia di questo istante e' per forza un residuo
+            # di un'esecuzione precedente, non di questa (vedi commento in
+            # parse_grade_result_jsonl). Un piccolo margine assorbe eventuale
+            # skew d'orologio quando si gira via --host/ssh.
+            not_before = datetime.now(timezone.utc) - timedelta(seconds=5)
             result = subprocess.run(
                 cmd, capture_output=True, text=True, timeout=120
             )
@@ -223,7 +279,7 @@ class LabGradeMonitor:
             output = result.stdout + result.stderr
             grade_text, _, json_tail = output.partition(JSON_MARKER)
             json_line = json_tail.strip().splitlines()[-1] if json_tail.strip() else None
-            checks = parse_grade_result_jsonl(json_line)
+            checks = parse_grade_result_jsonl(json_line, not_before=not_before)
             if checks is None:
                 checks = parse_lab_grade_output(grade_text)
             output = grade_text
@@ -232,7 +288,7 @@ class LabGradeMonitor:
             output = ""
             checks = []
             error = str(exc)
-        self.root.after(0, self._on_grade_done, checks, error, output)
+        self.result_queue.put((checks, error, output))
 
     def _on_grade_done(self, checks, error, raw_output):
         self.last_run = datetime.now()
