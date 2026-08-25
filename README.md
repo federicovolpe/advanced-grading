@@ -177,7 +177,7 @@ Il monitor (`bin/training_monitor.py`) invoca ciascuna fase come processo
 separato (`python3 <file>.py setup|grade`), esattamente come il wrapper
 `lab` fa per gli script di `lab-custom-grading/`.
 
-### Argomenti coperti (22 esercizi, Cap. 2-7 del manuale DO180)
+### Argomenti coperti (29 esercizi: Cap. 2-7 del manuale DO180 + Extra)
 
 Il Cap. 1 (console web, monitoraggio) non e' incluso: sono attivita'
 puramente esplorative senza uno stato verificabile via `oc`, stesso
@@ -194,18 +194,33 @@ sopra).
 - **Cap. 5 — Storage e configurazione**: ConfigMap come env (`c5-01`),
   Secret come volume (`c5-02`), PVC standalone (`c5-03`), PVC collegata a
   un Deployment esistente (`c5-04`), scelta esplicita di una storage
-  class (`c5-05`).
+  class (`c5-05`), StatefulSet con una PVC per replica (`c5-06`).
 - **Cap. 6 — Affidabilita'**: resource requests (`c6-01`), resource
   limits (`c6-02`), liveness probe (`c6-03`), readiness probe (`c6-04`),
   autoscaling con HPA (`c6-05`).
 - **Cap. 7 — Aggiornamenti**: ImageStream e import di un tag (`c7-01`),
   aggiornamento immagine con verifica del rollout (`c7-02`), image
   change trigger fra ImageStream e Deployment (`c7-03`).
+- **Extra — Sicurezza e RBAC** (non nel manuale DO180, argomenti da esame
+  di certificazione OpenShift/Kubernetes): creare un ServiceAccount
+  (`c8-01`), usarlo in un Deployment (`c8-02`), concedere un ClusterRole a
+  un utente con una RoleBinding (`c8-03`).
+- **Extra — Rete avanzata** (idem, DO280): NetworkPolicy (`c8-04`),
+  Ingress Kubernetes — con la relativa Route generata automaticamente da
+  OpenShift (`c8-05`).
+- **Extra — Scheduling e disponibilita'** (idem, DO380): PodDisruptionBudget
+  (`c8-06`).
 
-Tutti i 22 esercizi sono stati verificati dal vivo contro un cluster
+I capitoli "Extra" (`c8-*`) sono etichettati chiaramente come tali proprio
+perche' NON fanno parte del programma DO180: sono stati aggiunti da una
+lista di esempi di certificazione OpenShift/Kubernetes fornita dall'utente
+(domande 71-80), riadattati alle immagini e ai vincoli di questo classroom
+(vedi sotto) invece di ricopiare alla lettera i manifest originali.
+
+Tutti i 29 esercizi sono stati verificati dal vivo contro un cluster
 RHOCP 4.18 reale (namespace temporanei, poi cancellati): sia lo stato
 "non risolto" (deve dare FAIL) sia una soluzione simulata (deve dare
-PASS). Due note emerse dai test, gia' rispecchiate nel codice:
+PASS). Alcune note emerse dai test, gia' rispecchiate nel codice:
 
 - L'utente `developer` di un classroom DO180 puo' creare progetti (via
   `oc new-project`, API `ProjectRequest`) ma **non** puo' modificare il
@@ -216,6 +231,10 @@ PASS). Due note emerse dai test, gia' rispecchiate nel codice:
   segmento di `IMG` (es. `httpd-24`, `ubi`), **non** da `NOME` — verificato
   dal vivo prima di scrivere qualunque script che dipendesse da un nome di
   container, per non gradare per un nome che non esiste davvero.
+- Un Ingress Kubernetes accettato da OpenShift genera automaticamente una
+  Route "ombra" per lo stesso host — `c8-05` gradua anche quella, non solo
+  l'oggetto Ingress, per verificare che sia stato davvero ammesso e non
+  solo accettato dall'API.
 
 ### Estendere il training con nuovi esercizi
 
