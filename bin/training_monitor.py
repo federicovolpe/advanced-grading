@@ -103,6 +103,45 @@ def load_exercises(exercises_dir):
     return exercises
 
 
+def project_exists(name):
+    return subprocess.run(
+        ["oc", "get", "project", name], capture_output=True
+    ).returncode == 0
+
+
+def delete_project(name):
+    """Cancella un progetto OpenShift, se esiste. --wait=false: il comando
+    ritorna appena la cancellazione e' stata accettata dal server, senza
+    aspettare che il progetto finisca di terminare (puo' volere decine di
+    secondi) — non deve mai bloccare la UI o l'uscita dal programma."""
+    if project_exists(name):
+        subprocess.run(
+            ["oc", "delete", "project", name, "--wait=false"],
+            capture_output=True, timeout=30,
+        )
+
+
+def cleanup_all(exercises):
+    """Cancella tutti i progetti di training tuttora esistenti, uno per
+    ciascun esercizio noto (non un wildcard 'training-*': cosi' non si
+    rischia di toccare un progetto omonimo dello studente non creato da
+    questo strumento). Usata da 'training cleanup', rete di sicurezza per
+    quando la finestra e' stata chiusa in modo brusco (kill -9, crash,
+    spegnimento della VM) e la pulizia automatica di on_close()/
+    next_exercise() non e' quindi mai scattata."""
+    found = []
+    for ex in exercises:
+        if project_exists(ex["project"]):
+            found.append(ex["project"])
+    if not found:
+        print("Nessun progetto di training residuo.")
+        return
+    for name in found:
+        print(f"Cancello {name}...")
+        delete_project(name)
+    print(f"{len(found)} progetti cancellati (la cancellazione lato cluster prosegue in background).")
+
+
 def load_progress():
     try:
         with open(PROGRESS_FILE) as fh:
@@ -324,6 +363,12 @@ class TrainingMonitor:
         self.enter_exercise(save=False)
 
     def next_exercise(self):
+        # Cancella il progetto dell'esercizio che si sta lasciando: senza
+        # questo, un giro completo del curriculum lascia sul cluster fino a
+        # 22 progetti "training-*" mai piu' puliti da nessuno. In background:
+        # non deve bloccare il passaggio al prossimo esercizio.
+        leaving_project = self.current["project"]
+        threading.Thread(target=delete_project, args=(leaving_project,), daemon=True).start()
         if self.index + 1 < len(self.exercises):
             self.index += 1
             self.enter_exercise()
@@ -332,6 +377,11 @@ class TrainingMonitor:
 
     def on_close(self):
         self.running = False
+        # Stessa pulizia di next_exercise(), ma qui non c'e' una GUI che
+        # resta viva ad aspettare un thread in background: la cancellazione
+        # e' comunque rapida (--wait=false non aspetta la terminazione vera
+        # e propria del progetto, solo che il server accetti la richiesta).
+        delete_project(self.current["project"])
         self.root.destroy()
 
 
@@ -341,11 +391,19 @@ def main():
     parser.add_argument("--exercises-dir", default=DEFAULT_EXERCISES_DIR)
     parser.add_argument("--goto", type=int, help="Indice (1-based) dell'esercizio da cui iniziare")
     parser.add_argument("--list", action="store_true", help="Elenca gli esercizi disponibili ed esce")
+    parser.add_argument(
+        "--cleanup", action="store_true",
+        help="Cancella tutti i progetti di training residui sul cluster ed esce",
+    )
     args = parser.parse_args()
 
     exercises = load_exercises(args.exercises_dir)
     if not exercises:
         print(f"Nessun esercizio trovato in {args.exercises_dir}")
+        return
+
+    if args.cleanup:
+        cleanup_all(exercises)
         return
 
     if args.list:

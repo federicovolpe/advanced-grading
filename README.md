@@ -142,12 +142,21 @@ Apre una finestra grafica che mostra **un esercizio alla volta**:
    `~/.local/share/training/progress.json` e viene ripreso automaticamente
    la volta successiva che si lancia `start-training`.
 
+**Pulizia automatica**: il progetto OpenShift dell'esercizio che si lascia
+viene cancellato sia passando al successivo sia chiudendo la finestra —
+non resta mai piu' di un progetto `training-*` alla volta sul cluster.
+Se la finestra viene interrotta in modo brusco (kill -9, crash, chiusura
+della VM) quella pulizia non puo' scattare: `training cleanup`
+(o `training reset`, che la richiama) e' la rete di sicurezza che
+cancella qualunque progetto di training residuo.
+
 Altri comandi:
 
 ```bash
 training list        # elenca tutti gli esercizi disponibili e a che punto sei
 training goto <N>     # salta direttamente all'esercizio N (1-based)
-training reset        # azzera i progressi, si riparte dal primo esercizio
+training cleanup      # cancella eventuali progetti di training residui sul cluster
+training reset        # azzera i progressi e fa anche 'training cleanup'
 ```
 
 ### Struttura di un esercizio

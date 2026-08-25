@@ -1,9 +1,14 @@
 # Comandi per il curriculum di training "libero" DO180 (indipendente dal
 # tool ufficiale `lab`: esercizi inventati, non le guided exercise vere e
-# proprie, vedi training/README.md in questo repo). Ogni esercizio crea da
-# solo il proprio ambiente di partenza in un progetto OpenShift dedicato
+# proprie, vedi README.md in questo repo). Ogni esercizio crea da solo il
+# proprio ambiente di partenza in un progetto OpenShift dedicato
 # (training-<slug>) e viene gradato con polling automatico in una finestra
-# grafica, con un pulsante per passare al successivo.
+# grafica, con un pulsante per passare al successivo. Il progetto
+# dell'esercizio che si lascia viene cancellato automaticamente sia
+# passando al successivo sia chiudendo la finestra (training_monitor.py);
+# 'training cleanup'/'reset' sono solo una rete di sicurezza per chi la
+# finestra l'ha chiusa in modo brusco (kill -9, crash, spegnimento della
+# VM), quando quella pulizia automatica non ha potuto scattare.
 
 training() {
     local subcmd="${1:-start}"
@@ -36,12 +41,16 @@ training() {
             fi
             training start --goto "$2"
             ;;
+        cleanup)
+            python3 "$HOME/.local/bin/training_monitor.py" --cleanup
+            ;;
         reset)
             rm -f "$dir/progress.json"
             echo "Progressi azzerati: 'training start' ripartira' dal primo esercizio."
+            python3 "$HOME/.local/bin/training_monitor.py" --cleanup
             ;;
         *)
-            echo "Uso: training {start|list|goto <N>|reset}"
+            echo "Uso: training {start|list|goto <N>|cleanup|reset}"
             return 1
             ;;
     esac
