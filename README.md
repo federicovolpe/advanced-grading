@@ -10,6 +10,7 @@ I)** e **RH134 (Red Hat System Administration II)**. Risolvono due problemi:
 
 1. **Nessun feedback visivo dopo `lab start`.** Un monitor grafico (Tkinter) si apre automaticamente e mostra, come una fila di semafori, l'esito di `lab grade` aggiornato periodicamente.
 2. **Molte guided exercise non hanno un `lab grade` ufficiale.** Un wrapper attorno al comando `lab` intercetta la risposta `"The grade command is not supported for this lab."` e, se esiste, esegue al suo posto uno script di grading "custom" scritto per quell'esercizio specifico.
+3. **Non c'è modo di esercitarsi al di fuori delle guided exercise del corso.** Il comando `start-training` (vedi [sotto](#training-libero-esercizi-do180-indipendenti-da-lab)) fa partire un curriculum di esercizi atomici inventati (non le guided exercise ufficiali), che si crea da solo l'ambiente OpenShift di partenza e si grada con la stessa finestra a semafori.
 
 Tutto è pensato per essere trasparente: se un esercizio ha già un grading ufficiale, il comportamento di `lab` non cambia in alcun modo.
 
@@ -46,6 +47,9 @@ bash /tmp/do180-lab-grading/install.sh
 | `bin/lab_grade_monitor.py` | `~/.local/bin/lab_grade_monitor.py` | Monitor grafico a semafori per `lab grade` |
 | `bashrc.d/lab-grade-monitor.sh` | `~/.bashrc.d/lab-grade-monitor.sh` | Wrapper della funzione `lab` (intercetta `start` e `grade`) |
 | `lab-custom-grading/*.py` | `~/.local/share/lab-custom-grading/*.py` | Script di grading custom, uno per esercizio |
+| `bin/training_monitor.py` | `~/.local/bin/training_monitor.py` | Finestra del curriculum di training libero (`start-training`) |
+| `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training` |
+| `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero |
 
 ## Come funziona il wrapper
 
@@ -102,6 +106,126 @@ JSONL.
 - `project_exists(name)` — controlla se un progetto OpenShift esiste. (OpenShift/DO180)
 - `run(command, host="workstation", sudo=False)` — esegue un comando in locale o su un host della classroom (`servera`/`serverb`) via `ssh`, per corsi non-OpenShift come RH124/RH134.
 - `command_ok`, `user_exists`, `group_exists`, `package_installed`, `service_is_active`, `service_is_enabled`, `file_exists` — helper generici costruiti su `run()` per i controlli RHCSA più comuni.
+
+## Training libero: esercizi DO180 indipendenti da `lab`
+
+Oltre al grading delle guided exercise ufficiali (sopra), il repo include
+un secondo strumento, indipendente dal tool `lab` e dai materiali dei
+corsi Red Hat: un curriculum di **esercizi inventati**, che ricalcano gli
+argomenti del manuale DO180 (RHOCP 4.18) ma non sono le guided exercise
+originali. Pensato per esercitarsi quante volte si vuole, anche fuori da
+un classroom con `lab` installato — l'unico requisito e' un cluster
+OpenShift raggiungibile con `oc` e i permessi per creare progetti
+(self-provisioner, il default per l'utente `developer` di un classroom
+DO180).
+
+### Cosa fa
+
+```bash
+start-training          # equivalente a 'training start'
+```
+
+Apre una finestra grafica che mostra **un esercizio alla volta**:
+
+1. **Crea da solo l'ambiente di partenza** (`setup()`): un progetto
+   OpenShift dedicato (`training-<slug>`) con le risorse che l'esercizio
+   richiede come premessa (es. un Deployment gia' pronto a cui collegare
+   una PVC, o un pod rotto da riparare) — mai lo stato finale che lo
+   studente deve raggiungere.
+2. Mostra il **testo del compito** e i comandi suggeriti (ogni esercizio
+   e' volutamente atomico: **massimo 2-3 comandi** `oc`).
+3. **Grada in polling** (ogni 8s di default) lo stato reale del cluster,
+   con gli stessi semafori PASS/FAIL del monitor di `lab grade`.
+4. Un pulsante **"Esercizio successivo →"** (si tinge di verde quando
+   tutti i check sono PASS, ma resta comunque cliccabile per saltare)
+   passa avanti nel curriculum; il progresso e' salvato in
+   `~/.local/share/training/progress.json` e viene ripreso automaticamente
+   la volta successiva che si lancia `start-training`.
+
+Altri comandi:
+
+```bash
+training list        # elenca tutti gli esercizi disponibili e a che punto sei
+training goto <N>     # salta direttamente all'esercizio N (1-based)
+training reset        # azzera i progressi, si riparte dal primo esercizio
+```
+
+### Struttura di un esercizio
+
+Ogni file in `training/exercises/<capNN>-<slug>.py` e' un modulo
+autonomo che espone:
+
+- `CHAPTER`/`TITLE`/`PROJECT` — metadati mostrati nella finestra.
+- `TASK` — il testo del compito con i comandi suggeriti.
+- `setup()` — (ri)crea lo stato di partenza nel progetto dedicato
+  (idempotente: richiamabile piu' volte, es. da "Ricomincia esercizio").
+- `grade()` — un blocco `GradingStep` per ogni criterio, stesso stile e
+  stesso output testuale `PASS`/`FAIL <titolo>` degli script in
+  `lab-custom-grading/` (vedi `training/_training_common.py`, che riusa
+  `GradingStep`/`oc_get_json`/`project_exists` da `_common.py`).
+
+Il monitor (`bin/training_monitor.py`) invoca ciascuna fase come processo
+separato (`python3 <file>.py setup|grade`), esattamente come il wrapper
+`lab` fa per gli script di `lab-custom-grading/`.
+
+### Argomenti coperti (22 esercizi, Cap. 2-7 del manuale DO180)
+
+Il Cap. 1 (console web, monitoraggio) non e' incluso: sono attivita'
+puramente esplorative senza uno stato verificabile via `oc`, stesso
+giudizio applicato alle guided exercise ufficiali non gradabili (vedi
+sopra).
+
+- **Cap. 2 — CLI e API**: creare un progetto (`c2-01`), applicare una
+  label a un pod (`c2-02`).
+- **Cap. 3 — Container e Pod**: creare un pod con `oc run` (`c3-01`),
+  troubleshooting di un pod con un tag immagine sbagliato (`c3-02`).
+- **Cap. 4 — Deploy e rete**: creare un Deployment (`c4-01`), scalarlo
+  (`c4-02`), esporlo con un Service (`c4-03`) e con una Route (`c4-04`),
+  creare un Job (`c4-05`).
+- **Cap. 5 — Storage e configurazione**: ConfigMap come env (`c5-01`),
+  Secret come volume (`c5-02`), PVC standalone (`c5-03`), PVC collegata a
+  un Deployment esistente (`c5-04`), scelta esplicita di una storage
+  class (`c5-05`).
+- **Cap. 6 — Affidabilita'**: resource requests (`c6-01`), resource
+  limits (`c6-02`), liveness probe (`c6-03`), readiness probe (`c6-04`),
+  autoscaling con HPA (`c6-05`).
+- **Cap. 7 — Aggiornamenti**: ImageStream e import di un tag (`c7-01`),
+  aggiornamento immagine con verifica del rollout (`c7-02`), image
+  change trigger fra ImageStream e Deployment (`c7-03`).
+
+Tutti i 22 esercizi sono stati verificati dal vivo contro un cluster
+RHOCP 4.18 reale (namespace temporanei, poi cancellati): sia lo stato
+"non risolto" (deve dare FAIL) sia una soluzione simulata (deve dare
+PASS). Due note emerse dai test, gia' rispecchiate nel codice:
+
+- L'utente `developer` di un classroom DO180 puo' creare progetti (via
+  `oc new-project`, API `ProjectRequest`) ma **non** puo' modificare il
+  core `Namespace` risultante (es. `oc label namespace ...` da'
+  `Forbidden`) — per questo `c2-01` gradua una ConfigMap creata nel
+  progetto invece di una label sul namespace.
+- `oc create deployment NOME --image=IMG` nomina il container dall'ultimo
+  segmento di `IMG` (es. `httpd-24`, `ubi`), **non** da `NOME` — verificato
+  dal vivo prima di scrivere qualunque script che dipendesse da un nome di
+  container, per non gradare per un nome che non esiste davvero.
+
+### Estendere il training con nuovi esercizi
+
+1. Crea `training/exercises/<capNN>-<slug>.py` sul modello di uno
+   esistente (es. `c4-01-deploy-create.py` per un esercizio "creazione",
+   `c3-02-pods-fix-image.py` per uno di troubleshooting).
+2. Tienilo atomico: un solo concetto, max 2-3 comandi `oc` nel `TASK`.
+3. `setup()` deve creare la premessa, mai la soluzione; deve essere
+   idempotente (usa `reset_project()`/`ensure_project()` da
+   `_training_common.py`).
+4. Non assumere nomi di container/PVC fissi se il comando che li genera
+   non li rende deterministici (vedi `find_pvc_name_for_deployment()`,
+   usata da `c5-04`/`c5-05` per questo motivo).
+5. Testa end-to-end contro un cluster reale prima di aggiungerlo (stesso
+   vincolo di sicurezza del CLAUDE.md per `lab-custom-grading/`: mai
+   lasciare risorse di test residue in progetti diversi da quelli
+   dell'esercizio stesso).
+6. Rilancia `bash install.sh` per propagare il nuovo file a
+   `~/.local/share/training/exercises/`.
 
 ## Esercizi coperti
 

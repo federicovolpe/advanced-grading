@@ -217,3 +217,18 @@ contenuto diverso, ci sarebbe un conflitto. È un caso raro (i nomi sono
 tipicamente specifici del corso), ma prima di aggiungere un file controlla
 che non esista già uno script con lo stesso nome scritto per un corso
 diverso.
+
+## 7. Il curriculum "training libero" (training/) e' un'altra cosa
+
+`training/exercises/*.py` NON sono script di grading per guided exercise
+ufficiali: sono esercizi inventati da questo repo stesso (vedi
+`README.md`, sezione "Training libero"), avviati con `start-training`,
+indipendenti dal tool `lab` e dai materiali di un corso installato. Se
+l'utente chiede di aggiungere un esercizio "di training"/"per esercitarmi"
+anziche' il grading di una guided exercise specifica, e' questa la
+cartella giusta, non `lab-custom-grading/` — la metodologia (blocchi
+`GradingStep`, mai indovinare valori, testare dal vivo e pulire dopo) resta
+identica, ma qui non c'e' un testo di guida/manifest a cui allinearsi: la
+specifica la si inventa, quindi vanno bene solo compiti la cui riuscita e'
+verificabile in modo oggettivo via `oc` (stato del cluster), atomici (max
+2-3 comandi), con `setup()` che crea la premessa mai la soluzione.
