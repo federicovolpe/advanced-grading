@@ -19,9 +19,15 @@ Fonte dei check, in ordine di preferenza:
    usata.
 2. Fallback: regex sull'output testuale grezzo di 'lab grade' (stdout+stderr)
    — usato quando il JSONL manca (versione di 'labs' senza grading_log) o
-   quando il check-list e' vuoto (es. grade() non implementato per l'esercizio
-   -> lo script di grading custom, invocato dal wrapper bash, stampa comunque
-   "PASS <titolo>"/"FAIL <titolo>" in quel formato testuale).
+   quando il check-list e' vuoto. Deve riconoscere entrambi i formati che
+   possiamo trovarci davanti:
+   - "PASS <titolo>"/"FAIL <titolo>" testuale (grade() non implementato per
+     l'esercizio -> lo script di grading custom, invocato dal wrapper bash,
+     stampa in quel formato);
+   - "✓ <titolo>"/"✗ <titolo>" colorati con spinner (il rendering reale del
+     comando ufficiale 'lab grade' nelle versioni attuali di rht-labs-cli:
+     non stampa mai "PASS "/"FAIL " testuale, solo questi simboli dopo lo
+     spinner ⠋⠙⠹... che precede il risultato finale di ogni check).
 """
 
 import argparse
@@ -38,6 +44,14 @@ from datetime import datetime, timedelta, timezone
 JSON_MARKER = "__LAB_GRADE_MONITOR_JSON_TAIL__"
 
 CHECK_RE = re.compile(r"^(PASS|FAIL)\s+(.+?)\s*$")
+# Esito reso come check-mark/cross-mark colorato invece che testo "PASS"/
+# "FAIL" (es. "✗ The dbserver deployment is configured", confermato dal
+# rendering effettivo di 'lab grade' con rht-labs-cli corrente: usa solo
+# questi simboli, mai le stringhe testuali sopra). Accettiamo entrambe le
+# varianti unicode piu' comuni di check-mark (✓ U+2713, ✔ U+2714) e
+# cross-mark (✗ U+2717, ✘ U+2718) nel caso cambino leggermente tra versioni.
+SYMBOL_CHECK_RE = re.compile(r"^([✓✔✗✘])\s+(.+?)\s*$")
+PASS_SYMBOLS = "✓✔"
 # CSI generico (ECMA-48): ESC [ <param 0x30-0x3F>* <intermediate 0x20-0x2F>* <final 0x40-0x7E>
 # Deve includere '?' (0x3F) altrimenti le sequenze "private mode" tipo
 # ESC[?25l / ESC[?25h (show/hide cursor, usate dallo spinner di `lab grade`)
@@ -63,9 +77,15 @@ def parse_lab_grade_output(text):
         line = raw_line.rstrip()
         m = CHECK_RE.match(line)
         if m:
+            status, title = m.group(1), m.group(2)
+        else:
+            sym = SYMBOL_CHECK_RE.match(line)
+            status = ("PASS" if sym.group(1) in PASS_SYMBOLS else "FAIL") if sym else None
+            title = sym.group(2) if sym else None
+        if status:
             if current:
                 checks.append(current)
-            current = {"status": m.group(1), "title": m.group(2), "details": []}
+            current = {"status": status, "title": title, "details": []}
             continue
         if current is None:
             continue
