@@ -223,7 +223,7 @@ Il monitor (`bin/training_monitor.py`) invoca ciascuna fase come processo
 separato (`python3 <file>.py setup|grade|cleanup`), esattamente come il
 wrapper `lab` fa per gli script di `lab-custom-grading/`.
 
-### DO180 training: 29 esercizi (Cap. 2-7 del manuale DO180 + Extra)
+### DO180 training: 32 esercizi (Cap. 2-7 del manuale DO180 + Extra)
 
 Il Cap. 1 (console web, monitoraggio) non e' incluso: sono attivita'
 puramente esplorative senza uno stato verificabile via `oc`, stesso
@@ -231,7 +231,8 @@ giudizio applicato alle guided exercise ufficiali non gradabili (vedi
 sopra).
 
 - **Cap. 2 — CLI e API**: creare un progetto (`c2-01`), applicare una
-  label a un pod (`c2-02`).
+  label a un pod (`c2-02`), installare il client `oc` in una directory
+  specifica (`c2-03` — tema uscito all'esame, vedi sotto).
 - **Cap. 3 — Container e Pod**: creare un pod con `oc run` (`c3-01`),
   troubleshooting di un pod con un tag immagine sbagliato (`c3-02`).
 - **Cap. 4 — Deploy e rete**: creare un Deployment (`c4-01`), scalarlo
@@ -240,7 +241,9 @@ sopra).
 - **Cap. 5 — Storage e configurazione**: ConfigMap come env (`c5-01`),
   Secret come volume (`c5-02`), PVC standalone (`c5-03`), PVC collegata a
   un Deployment esistente (`c5-04`), scelta esplicita di una storage
-  class (`c5-05`), StatefulSet con una PVC per replica (`c5-06`).
+  class (`c5-05`), StatefulSet con una PVC per replica (`c5-06`), ConfigMap
+  con index.html montata su un percorso specifico `/messages` (`c5-07` —
+  tema uscito all'esame, vedi sotto).
 - **Cap. 6 — Affidabilita'**: resource requests (`c6-01`), resource
   limits (`c6-02`), liveness probe (`c6-03`), readiness probe (`c6-04`),
   autoscaling con HPA (`c6-05`).
@@ -256,12 +259,29 @@ sopra).
   OpenShift (`c8-05`).
 - **Extra — Scheduling e disponibilita'** (idem, DO380): PodDisruptionBudget
   (`c8-06`).
+- **Cap. 9 — Support e Troubleshooting**: dump compresso (tar.gz) delle
+  risorse di un progetto con `oc cluster-info dump` (`c9-01` — tema uscito
+  all'esame come "dump di tutto il cluster", scoped a un progetto per i
+  permessi limitati dell'utente `developer` in questo classroom; vedi
+  docstring del file per il dettaglio dell'adattamento).
 
 I capitoli "Extra" (`c8-*`) sono etichettati chiaramente come tali proprio
 perche' NON fanno parte del programma DO180: sono stati aggiunti da una
 lista di esempi di certificazione OpenShift/Kubernetes fornita dall'utente
 (domande 71-80), riadattati alle immagini e ai vincoli di questo classroom
 (vedi sotto) invece di ricopiare alla lettera i manifest originali.
+
+`c2-03`, `c5-07` e `c9-01` sono stati invece aggiunti da tre domande
+d'esame segnalate dall'utente come argomenti trattati nel manuale DO180
+(installazione della CLI in una directory specifica, ConfigMap servita su
+un percorso specifico, dump compresso del cluster) — su questa macchina
+non era disponibile il pacchetto ufficiale `do180` per confrontare il
+testo esatto della guida, quindi la specifica di questi tre e' stata
+dedotta dal comando CLI reale che risolve il compito, non da un estratto
+di manuale verificato (vedi i singoli file per il dettaglio). Tutti e tre
+sono stati testati dal vivo contro il cluster reale di questa classe
+(ciclo setup → grade FAIL → soluzione applicata → grade PASS → cleanup)
+prima di essere aggiunti.
 
 Tutti i 29 esercizi sono stati verificati dal vivo contro un cluster
 RHOCP 4.18 reale (namespace temporanei, poi cancellati): sia lo stato
