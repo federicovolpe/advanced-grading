@@ -7,7 +7,7 @@ ma per un curriculum indipendente dal tool ufficiale `lab` (vedi
 training/README.md in questo repo).
 
 Uso:
-    ./training_monitor.py [--interval SECONDI] [--exercises-dir DIR] [--list] [--goto N]
+    ./training_monitor.py [--interval SECONDI] [--exercises-dir DIR] [--list] [--goto N|SLUG]
 
 Ogni file in --exercises-dir (default ~/.local/share/training/exercises,
 ordinato per nome — da cui il prefisso "cNN-" nei nomi file) e' un modulo
@@ -31,7 +31,24 @@ import time
 # lab_grade_monitor.py).
 
 DEFAULT_EXERCISES_DIR = os.path.expanduser("~/.local/share/training/exercises")
-PROGRESS_FILE = os.path.expanduser("~/.local/share/training/progress.json")
+
+
+def progress_file_for(exercises_dir):
+    """Un file di progresso per traccia (directory di esercizi), cosi' due
+    curricula indipendenti (es. DO180 ed exercises-do188) non si sovrascrivono
+    a vicenda. La traccia di default ('exercises', quella storica) mantiene
+    il nome file originale per compatibilita' con i progressi gia' salvati."""
+    base = os.path.basename(os.path.normpath(exercises_dir))
+    if base == "exercises":
+        return os.path.expanduser("~/.local/share/training/progress.json")
+    return os.path.expanduser(f"~/.local/share/training/progress-{base}.json")
+
+
+def course_label_for(exercises_dir):
+    base = os.path.basename(os.path.normpath(exercises_dir))
+    if base.startswith("exercises-"):
+        return base[len("exercises-"):].upper()
+    return "DO180"
 
 CHECK_RE = re.compile(r"^(PASS|FAIL)\s+(.+?)\s*$")
 ANSI_RE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -103,56 +120,76 @@ def load_exercises(exercises_dir):
     return exercises
 
 
-def project_exists(name):
-    return subprocess.run(
-        ["oc", "get", "project", name], capture_output=True
-    ).returncode == 0
+def resolve_exercise_index(target, exercises):
+    """Traduce l'argomento di --goto in un indice 0-based. Accetta sia il
+    numero (1-based, comportamento storico) sia il nome dell'esercizio —
+    utile quando lo si e' visto su GitHub (nome file senza '.py', es.
+    'c5-02-storage-pvc') e si vuole saltarci direttamente senza prima fare
+    'training list' per contarne la posizione. Il match sullo slug e'
+    esatto se possibile, altrimenti per sottostringa (case-insensitive, va
+    bene anche solo 'storage-pvc'); se piu' esercizi corrispondono per
+    sottostringa e' un errore esplicito invece di sceglierne uno a caso."""
+    if target.isdigit():
+        index = int(target) - 1
+        if not 0 <= index < len(exercises):
+            raise ValueError(
+                f"Numero esercizio fuori range: {target} (1-{len(exercises)})"
+            )
+        return index
+
+    for i, ex in enumerate(exercises):
+        if ex["slug"] == target:
+            return i
+
+    needle = target.lower()
+    matches = [i for i, ex in enumerate(exercises) if needle in ex["slug"].lower()]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise ValueError(f"Nessun esercizio corrisponde a '{target}'")
+    candidates = ", ".join(exercises[i]["slug"] for i in matches)
+    raise ValueError(f"'{target}' e' ambiguo, corrisponde a: {candidates}")
 
 
-def delete_project(name):
-    """Cancella un progetto OpenShift, se esiste. --wait=false: il comando
-    ritorna appena la cancellazione e' stata accettata dal server, senza
-    aspettare che il progetto finisca di terminare (puo' volere decine di
-    secondi) — non deve mai bloccare la UI o l'uscita dal programma."""
-    if project_exists(name):
+def teardown_exercise(exercise_file, timeout=60):
+    """Invoca 'python3 <esercizio>.py cleanup': e' il modulo stesso a sapere
+    se questo significa cancellare un progetto OpenShift (DO180) o rimuovere
+    container/immagini/volumi/reti Podman locali (DO188), non il monitor —
+    vedi _training_common.run_cli(). Pensata per girare in un thread di
+    background (next_exercise()/on_close()): non deve mai bloccare la UI."""
+    try:
         subprocess.run(
-            ["oc", "delete", "project", name, "--wait=false"],
-            capture_output=True, timeout=30,
+            ["python3", exercise_file, "cleanup"],
+            capture_output=True, timeout=timeout,
         )
+    except (subprocess.TimeoutExpired, OSError):
+        pass
 
 
 def cleanup_all(exercises):
-    """Cancella tutti i progetti di training tuttora esistenti, uno per
-    ciascun esercizio noto (non un wildcard 'training-*': cosi' non si
-    rischia di toccare un progetto omonimo dello studente non creato da
-    questo strumento). Usata da 'training cleanup', rete di sicurezza per
-    quando la finestra e' stata chiusa in modo brusco (kill -9, crash,
-    spegnimento della VM) e la pulizia automatica di on_close()/
-    next_exercise() non e' quindi mai scattata."""
-    found = []
+    """Esegue il cleanup di OGNI esercizio noto, incondizionatamente (ogni
+    cleanup() e' idempotente e ignora le risorse gia' assenti — vedi
+    podman_reset()/il fallback su PROJECT in run_cli()). Usata da 'training
+    cleanup', rete di sicurezza per quando la finestra e' stata chiusa in
+    modo brusco (kill -9, crash, spegnimento della VM) e la pulizia
+    automatica di on_close()/next_exercise() non e' quindi mai scattata."""
+    print(f"Pulizia di {len(exercises)} esercizi...")
     for ex in exercises:
-        if project_exists(ex["project"]):
-            found.append(ex["project"])
-    if not found:
-        print("Nessun progetto di training residuo.")
-        return
-    for name in found:
-        print(f"Cancello {name}...")
-        delete_project(name)
-    print(f"{len(found)} progetti cancellati (la cancellazione lato cluster prosegue in background).")
+        teardown_exercise(ex["file"])
+    print("Pulizia completata.")
 
 
-def load_progress():
+def load_progress(progress_file):
     try:
-        with open(PROGRESS_FILE) as fh:
+        with open(progress_file) as fh:
             return json.load(fh)
     except (OSError, json.JSONDecodeError):
         return {"index": 0}
 
 
-def save_progress(progress):
-    os.makedirs(os.path.dirname(PROGRESS_FILE), exist_ok=True)
-    with open(PROGRESS_FILE, "w") as fh:
+def save_progress(progress, progress_file):
+    os.makedirs(os.path.dirname(progress_file), exist_ok=True)
+    with open(progress_file, "w") as fh:
         json.dump(progress, fh)
 
 
@@ -161,17 +198,18 @@ class TrainingMonitor:
     FAIL_COLOR = "#e74c3c"
     BUSY_COLOR = "#7f8c8d"
 
-    def __init__(self, root, exercises, start_index, interval):
+    def __init__(self, root, exercises, start_index, interval, progress_file, course_label):
         self.root = root
         self.exercises = exercises
         self.index = max(0, min(start_index, len(exercises) - 1))
         self.interval = interval
+        self.progress_file = progress_file
         self.checks = []
         self.running = True
         self.busy = False
         self.result_queue = queue.Queue()
 
-        root.title("Training DO180")
+        root.title(f"Training {course_label}")
         root.attributes("-topmost", True)
         root.geometry("620x520")
         root.configure(bg="#1e1e1e")
@@ -239,7 +277,7 @@ class TrainingMonitor:
     def enter_exercise(self, save=True):
         ex = self.current
         if save:
-            save_progress({"index": self.index})
+            save_progress({"index": self.index}, self.progress_file)
         self.checks = []
         self.progress_label.config(
             text=f"Esercizio {self.index + 1}/{len(self.exercises)} — {ex['chapter']}"
@@ -363,12 +401,13 @@ class TrainingMonitor:
         self.enter_exercise(save=False)
 
     def next_exercise(self):
-        # Cancella il progetto dell'esercizio che si sta lasciando: senza
-        # questo, un giro completo del curriculum lascia sul cluster fino a
-        # 22 progetti "training-*" mai piu' puliti da nessuno. In background:
-        # non deve bloccare il passaggio al prossimo esercizio.
-        leaving_project = self.current["project"]
-        threading.Thread(target=delete_project, args=(leaving_project,), daemon=True).start()
+        # Pulisce l'ambiente dell'esercizio che si sta lasciando (progetto
+        # OpenShift o risorse Podman locali, a seconda del modulo — vedi
+        # teardown_exercise()): senza questo, un giro completo del curriculum
+        # lascia residui mai piu' puliti da nessuno. In background: non deve
+        # bloccare il passaggio al prossimo esercizio.
+        leaving_file = self.current["file"]
+        threading.Thread(target=teardown_exercise, args=(leaving_file,), daemon=True).start()
         if self.index + 1 < len(self.exercises):
             self.index += 1
             self.enter_exercise()
@@ -378,10 +417,9 @@ class TrainingMonitor:
     def on_close(self):
         self.running = False
         # Stessa pulizia di next_exercise(), ma qui non c'e' una GUI che
-        # resta viva ad aspettare un thread in background: la cancellazione
-        # e' comunque rapida (--wait=false non aspetta la terminazione vera
-        # e propria del progetto, solo che il server accetti la richiesta).
-        delete_project(self.current["project"])
+        # resta viva ad aspettare un thread in background: teardown_exercise
+        # ha comunque un timeout breve, non deve bloccare a lungo l'uscita.
+        teardown_exercise(self.current["file"])
         self.root.destroy()
 
 
@@ -389,11 +427,19 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--interval", type=int, default=8, help="Secondi tra un grading e il successivo (default: 8)")
     parser.add_argument("--exercises-dir", default=DEFAULT_EXERCISES_DIR)
-    parser.add_argument("--goto", type=int, help="Indice (1-based) dell'esercizio da cui iniziare")
+    parser.add_argument(
+        "--goto",
+        help="Esercizio da cui iniziare: numero 1-based (es. 5) oppure nome/slug"
+             " (es. c5-02-storage-pvc, anche parziale)",
+    )
     parser.add_argument("--list", action="store_true", help="Elenca gli esercizi disponibili ed esce")
     parser.add_argument(
         "--cleanup", action="store_true",
-        help="Cancella tutti i progetti di training residui sul cluster ed esce",
+        help="Esegue il cleanup di tutti gli esercizi (progetti/risorse residue) ed esce",
+    )
+    parser.add_argument(
+        "--reset", action="store_true",
+        help="Come --cleanup, ma azzera anche i progressi salvati per questa traccia",
     )
     args = parser.parse_args()
 
@@ -402,28 +448,45 @@ def main():
         print(f"Nessun esercizio trovato in {args.exercises_dir}")
         return
 
+    progress_file = progress_file_for(args.exercises_dir)
+    course_label = course_label_for(args.exercises_dir)
+
+    if args.reset:
+        cleanup_all(exercises)
+        try:
+            os.remove(progress_file)
+        except OSError:
+            pass
+        print(f"Progressi azzerati ({progress_file}).")
+        return
+
     if args.cleanup:
         cleanup_all(exercises)
         return
 
     if args.list:
-        progress = load_progress()
+        progress = load_progress(progress_file)
+        print(f"Traccia: {course_label}")
         for i, ex in enumerate(exercises):
             marker = "→" if i == progress.get("index", 0) else " "
             print(f"{marker} {i + 1:2d}. [{ex['chapter']}] {ex['title']}  ({ex['slug']})")
         return
 
     if args.goto:
-        start_index = args.goto - 1
+        try:
+            start_index = resolve_exercise_index(args.goto, exercises)
+        except ValueError as exc:
+            print(exc)
+            return
     else:
-        start_index = load_progress().get("index", 0)
+        start_index = load_progress(progress_file).get("index", 0)
 
     global tk, scrolledtext
     import tkinter as tk
     from tkinter import scrolledtext
 
     root = tk.Tk()
-    TrainingMonitor(root, exercises, start_index, args.interval)
+    TrainingMonitor(root, exercises, start_index, args.interval, progress_file, course_label)
     root.mainloop()
 
 

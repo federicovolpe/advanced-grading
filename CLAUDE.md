@@ -122,6 +122,35 @@ scrivi comunque lo script, documentando chiaramente nel docstring che è un
 check dal vivo valido solo PRIMA di `lab finish` (dopo, il progetto sparisce
 ed è corretto che tutto torni FAIL).
 
+**Un caso diverso, più insidioso: uno stato intermedio che un passo
+SUCCESSIVO DELLA STESSA GUIDA smonta** (non `lab finish` — la guida stessa).
+Esempio reale: `basics-lifecycle` (DO188) fa passare un container per
+create+avvia → verifica → ferma → verifica → riavvia → verifica → rimuovi
+forzatamente → verifica. Un controllo dello stato ATTUALE funziona solo per
+l'ULTIMA fase: dopo la rimozione finale, "è stato avviato"/"è stato fermato"
+tornerebbero FAIL anche se lo studente li ha eseguiti perfettamente, perché
+`grade()` è un processo nuovo ad ogni poll del monitor (nessuna memoria del
+giro precedente) e quello stato non esiste più. Ancora peggio per un
+container `--rm` che vive una frazione di secondo (`basics-creating`, 1.3):
+nessun poll a intervalli fissi lo vedrà mai in `podman ps`, per quanto lo
+studente lo esegua correttamente. Due primitive in `_common.py` per questo:
+
+- `ever_true(lab_name, check_name, currently_true)` — persiste su disco un
+  check già visto vero in un poll precedente (generico, ma richiede che lo
+  stato sia durato abbastanza da essere colto da ALMENO un poll dal vivo).
+- `podman_events(since=, event=)` / `podman_ever_started(image=, name=,
+  since=)` — leggono il registro EVENTI di Podman (persistente, non basato
+  su polling): l'unico modo di sapere con certezza se un container `--rm`
+  è mai esistito, non solo l'ultimo stato osservato.
+
+Entrambe hanno per ambito il singolo tentativo: passa `since=
+attempt_started_at(LAB_NAME)` (letto dal marcatore che il wrapper bash
+scrive ad ogni `lab start <nome-lab>`) per non ripescare eventi di un
+tentativo precedente — il wrapper cancella anche lo stato di `ever_true()`
+alla stessa occasione. Vedi `basics-lifecycle.py`/`basics-creating.py` per
+due esempi completi, verificati dal vivo fase per fase (non solo stato
+iniziale/finale) prima di essere aggiunti.
+
 ## 3. Scrivi lo script
 
 Usa `lab-custom-grading/_common.py` (già generico, va bene per qualunque
@@ -220,15 +249,44 @@ diverso.
 
 ## 7. Il curriculum "training libero" (training/) e' un'altra cosa
 
-`training/exercises/*.py` NON sono script di grading per guided exercise
-ufficiali: sono esercizi inventati da questo repo stesso (vedi
-`README.md`, sezione "Training libero"), avviati con `start-training`,
+`training/exercises/*.py` (traccia DO180) e `training/exercises-do188/*.py`
+(traccia DO188) NON sono script di grading per guided exercise ufficiali:
+sono esercizi inventati da questo repo stesso (vedi README.md, sezione
+"Training libero"), avviati con `start-training`/`start-training-do188`,
 indipendenti dal tool `lab` e dai materiali di un corso installato. Se
 l'utente chiede di aggiungere un esercizio "di training"/"per esercitarmi"
-anziche' il grading di una guided exercise specifica, e' questa la
-cartella giusta, non `lab-custom-grading/` — la metodologia (blocchi
-`GradingStep`, mai indovinare valori, testare dal vivo e pulire dopo) resta
-identica, ma qui non c'e' un testo di guida/manifest a cui allinearsi: la
-specifica la si inventa, quindi vanno bene solo compiti la cui riuscita e'
-verificabile in modo oggettivo via `oc` (stato del cluster), atomici (max
-2-3 comandi), con `setup()` che crea la premessa mai la soluzione.
+anziche' il grading di una guided exercise specifica, e' una di queste due
+cartelle la scelta giusta, non `lab-custom-grading/` — la metodologia
+(blocchi `GradingStep`, mai indovinare valori, testare dal vivo e pulire
+dopo) resta identica, ma qui non c'e' un testo di guida/manifest a cui
+allinearsi: la specifica la si inventa, quindi vanno bene solo compiti la
+cui riuscita e' verificabile in modo oggettivo, atomici (max 2-3 comandi),
+con `setup()` che crea la premessa mai la soluzione.
+
+Due tracce, a seconda di dove vive lo stato da verificare:
+
+- **DO180** (`training/exercises/`) — stato su un cluster OpenShift
+  (`oc`/`reset_project()`/`ensure_project()` da `_training_common.py`).
+- **DO188** (`training/exercises-do188/`) — stato Podman locale sulla
+  workstation, nessun cluster richiesto (`podman()`/`podman_reset()` da
+  `_training_common.py`, che riusano gli helper `podman_*`/`container_*` di
+  `_common.py` — vedi sezione "Podman" sopra). Ogni modulo espone anche
+  `cleanup()` (oltre a `setup()`/`grade()`), passata esplicitamente a
+  `run_cli(setup, grade, cleanup)`: e' quella a rimuovere container/
+  immagini/volumi/reti create dall'esercizio (`podman_reset()`), perche' il
+  monitor non sa piu' cosa "ripulire un ambiente" significhi in astratto —
+  lo chiede al modulo invocandolo come `python3 <file>.py cleanup`. Gli
+  esercizi DO180 scritti prima che `cleanup()` esistesse continuano a
+  funzionare senza modifiche: se un modulo non la passa, `run_cli()` ricade
+  sul vecchio comportamento (cancellare il progetto OpenShift in `PROJECT`).
+
+Prima di scrivere un esercizio Podman, verifica sempre dal vivo su questa
+workstation il comportamento che dai per scontato — non fidarti della
+memoria su un'altra immagine/versione simile. In questa sessione sono
+emerse almeno tre sorprese verificate solo testando: il backend di rete
+rootless di default e' `pasta` (l'IP di un container su una rete bridge
+utente non e' raggiungibile dall'host, solo da altri container sulla stessa
+rete), il comando di avvio reale di `ubi9/httpd-24` e' `run-httpd` (non
+`httpd-foreground`), e `podman rm -f` senza `-v` lascia orfani i volumi
+anonimi creati da alcune immagini (es. `mysql`) oltre a quelli nominati
+esplicitamente.

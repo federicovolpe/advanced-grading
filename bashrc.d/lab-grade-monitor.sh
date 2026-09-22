@@ -18,20 +18,31 @@ _lab_grade_with_custom_fallback() {
         fi
     done
 
-    local output status
+    local output status stripped
     output=$(command lab grade "$@" 2>&1)
     status=$?
     printf '%s\n' "$output"
 
     # Fallback sul grading custom non solo quando l'ufficiale risponde
     # letteralmente "The grade command is not supported for this lab.", ma
-    # ogni volta che non produce nessun check PASS/FAIL reale: capita anche
-    # per un blip transitorio del comando ufficiale (es. subito dopo 'lab
-    # start', cluster/progetto non ancora del tutto pronti) che restituisce
-    # solo il banner "Running: ..." e nient'altro, senza quella stringa
-    # esatta — in quel caso lo script custom (se esiste) resta comunque la
-    # fonte di verita' migliore disponibile.
-    if [[ -n "$lab_name" ]] && ! grep -qE '^(PASS|FAIL) ' <<<"$output"; then
+    # ogni volta che non produce nessun check PASS/FAIL/✓/✗ reale: capita
+    # anche per un blip transitorio del comando ufficiale (es. subito dopo
+    # 'lab start', cluster/progetto non ancora del tutto pronti) che
+    # restituisce solo il banner "Running: ..." e nient'altro, senza quella
+    # stringa esatta — in quel caso lo script custom (se esiste) resta
+    # comunque la fonte di verita' migliore disponibile.
+    #
+    # Il pattern deve riconoscere ENTRAMBI i formati di esito, non solo
+    # "PASS "/"FAIL " testuale: le versioni attuali di 'lab grade' rendono
+    # l'esito coi simboli colorati ✓/✗ (mai quel testo), come gia' fa
+    # lab_grade_monitor.py (SYMBOL_CHECK_RE) — questo controllo era rimasto
+    # indietro e trattava un grading ufficiale perfettamente riuscito come
+    # "non disponibile", rilanciando inutilmente lo script custom sopra a un
+    # risultato gia' buono. Le sequenze ANSI (colore/cursore) vanno rimosse
+    # prima del match, altrimenti un simbolo colorato non e' mai a inizio
+    # riga "pulito".
+    stripped=$(printf '%s' "$output" | sed -E 's/\x1b\[[0-9;?]*[a-zA-Z]//g')
+    if [[ -n "$lab_name" ]] && ! grep -qE '^(PASS|FAIL) |^[✓✔✗✘] ' <<<"$stripped"; then
         local custom="$HOME/.local/share/lab-custom-grading/${lab_name}.py"
         if [[ -f "$custom" ]]; then
             echo
@@ -75,6 +86,21 @@ lab() {
     if [[ -z "$lab_name" ]]; then
         return $status
     fi
+
+    # Azzera lo stato "milestone" (vedi _common.py: ever_true()/
+    # attempt_started_at()) di un eventuale tentativo precedente di questo
+    # stesso esercizio, e registra l'istante di questo 'lab start': gli
+    # script di grading custom per compiti che l'esercizio stesso chiede di
+    # smontare (es. "crea un container", poi "rimuovilo" in un passo
+    # successivo) devono ricordarsi che una fase e' stata completata anche
+    # dopo che quello stato e' stato distrutto — ma solo per QUESTO
+    # tentativo, non per uno precedente (altrimenti un 'lab start' di reset
+    # ripartirebbe con dei check gia' verdi senza che lo studente abbia
+    # fatto nulla).
+    local state_dir="$HOME/.grading/custom-state"
+    mkdir -p "$state_dir"
+    rm -f "$state_dir/${lab_name}."*
+    date -u +"%Y-%m-%dT%H:%M:%SZ" > "$state_dir/${lab_name}.started_at"
 
     # Niente display grafico (es. sessione SSH pura): non provare a lanciare
     # Tkinter, ma non rompere comunque `lab start`.

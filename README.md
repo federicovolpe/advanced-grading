@@ -4,13 +4,15 @@ Strumenti nati per il corso Red Hat **DO180 (Red Hat OpenShift Administration
 I)**, ma il meccanismo è generico: qualunque corso eseguito con lo stesso tool
 `lab` (rpm `lab-service`) può avere script di grading custom aggiunti qui
 (vedi [CLAUDE.md](CLAUDE.md) per estenderlo ad altri corsi). Oggi il repo
-copre anche **DO280 (Red Hat OpenShift Administration II)**, **DO380 (Red
-Hat OpenShift Administration III)**, **RH124 (Red Hat System Administration
-I)** e **RH134 (Red Hat System Administration II)**. Risolvono due problemi:
+copre anche **DO188 (Red Hat OpenShift Development I: Introduction to
+Containers with Podman)**, **DO280 (Red Hat OpenShift Administration II)**,
+**DO380 (Red Hat OpenShift Administration III)**, **RH124 (Red Hat System
+Administration I)** e **RH134 (Red Hat System Administration II)**. Risolvono
+tre problemi:
 
 1. **Nessun feedback visivo dopo `lab start`.** Un monitor grafico (Tkinter) si apre automaticamente e mostra, come una fila di semafori, l'esito di `lab grade` aggiornato periodicamente.
 2. **Molte guided exercise non hanno un `lab grade` ufficiale.** Un wrapper attorno al comando `lab` intercetta la risposta `"The grade command is not supported for this lab."` e, se esiste, esegue al suo posto uno script di grading "custom" scritto per quell'esercizio specifico.
-3. **Non c'è modo di esercitarsi al di fuori delle guided exercise del corso.** Il comando `start-training` (vedi [sotto](#training-libero-esercizi-do180-indipendenti-da-lab)) fa partire un curriculum di esercizi atomici inventati (non le guided exercise ufficiali), che si crea da solo l'ambiente OpenShift di partenza e si grada con la stessa finestra a semafori.
+3. **Non c'è modo di esercitarsi al di fuori delle guided exercise del corso.** I comandi `start-training` (traccia DO180, stato su un cluster OpenShift) e `start-training-do188` (traccia DO188, stato Podman locale sulla workstation — vedi [sotto](#training-libero-due-curricula-indipendenti-da-lab)) fanno partire un curriculum di esercizi atomici inventati (non le guided exercise ufficiali), che si crea da solo l'ambiente di partenza e si grada con la stessa finestra a semafori.
 
 Tutto è pensato per essere trasparente: se un esercizio ha già un grading ufficiale, il comportamento di `lab` non cambia in alcun modo.
 
@@ -47,19 +49,29 @@ bash /tmp/do180-lab-grading/install.sh
 | `bin/lab_grade_monitor.py` | `~/.local/bin/lab_grade_monitor.py` | Monitor grafico a semafori per `lab grade` |
 | `bashrc.d/lab-grade-monitor.sh` | `~/.bashrc.d/lab-grade-monitor.sh` | Wrapper della funzione `lab` (intercetta `start` e `grade`) |
 | `lab-custom-grading/*.py` | `~/.local/share/lab-custom-grading/*.py` | Script di grading custom, uno per esercizio |
-| `bin/training_monitor.py` | `~/.local/bin/training_monitor.py` | Finestra del curriculum di training libero (`start-training`) |
-| `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training` |
-| `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero |
+| `bin/training_monitor.py` | `~/.local/bin/training_monitor.py` | Finestra del curriculum di training libero (`start-training`/`start-training-do188`) |
+| `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training`/`start-training-do188` |
+| `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero DO180 |
+| `training/exercises-do188/*.py` | `~/.local/share/training/exercises-do188/` | Esercizi del training libero DO188 (stato Podman locale) |
 
 ## Come funziona il wrapper
 
 La funzione bash `lab()` (definita in `bashrc.d/lab-grade-monitor.sh`) sostituisce il comando `lab` nella shell:
 
-- **`lab start <nome>`**: esegue il comando reale, poi lancia in background `lab_grade_monitor.py <nome>` (solo se c'è un display grafico disponibile).
-- **`lab grade <nome>`**: esegue il comando reale e ne mostra l'output. Se la risposta contiene `"The grade command is not supported for this lab."`, cerca `~/.local/share/lab-custom-grading/<nome>.py` e, se esiste, lo esegue al posto del grading ufficiale.
+- **`lab start <nome>`**: esegue il comando reale, azzera lo stato "milestone" di un eventuale tentativo precedente di questo esercizio e registra l'istante di avvio (vedi `_common.py`/`ever_true()` sotto), poi lancia in background `lab_grade_monitor.py <nome>` (solo se c'è un display grafico disponibile).
+- **`lab grade <nome>`**: esegue il comando reale e ne mostra l'output. Se la risposta non contiene una riga `PASS `/`FAIL ` né un simbolo `✓`/`✔`/`✗`/`✘` (le due forme in cui il grading ufficiale renderizza un esito reale — non solo la stringa letterale `"The grade command is not supported for this lab."`), cerca `~/.local/share/lab-custom-grading/<nome>.py` e, se esiste, lo esegue al posto del grading ufficiale.
 - Qualsiasi altro sottocomando passa invariato al binario originale (`command lab ...`).
 
 Il monitor grafico chiama `lab grade` passando dalla shell (sourciando il wrapper), non invocando direttamente il binario: così il fallback su grading custom scatta anche dalla finestra del monitor, non solo da terminale.
+
+**Bug corretto**: fino a poco fa il controllo sopra riconosceva solo il
+testo letterale `PASS `/`FAIL `, non i simboli `✓`/`✗` con cui le versioni
+attuali di `lab grade` renderizzano davvero l'esito (mai quel testo) — lo
+stesso formato che `lab_grade_monitor.py` aveva già imparato a riconoscere
+in un commit precedente, ma il wrapper bash no. Risultato pratico: per un
+esercizio con grading ufficiale perfettamente funzionante, il wrapper
+pensava che non avesse prodotto nulla di valido e rilanciava inutilmente lo
+script custom (se esisteva per quel nome) sopra a un risultato già buono.
 
 ## Libreria condivisa per i grading custom (`_common.py`)
 
@@ -106,23 +118,43 @@ JSONL.
 - `project_exists(name)` — controlla se un progetto OpenShift esiste. (OpenShift/DO180)
 - `run(command, host="workstation", sudo=False)` — esegue un comando in locale o su un host della classroom (`servera`/`serverb`) via `ssh`, per corsi non-OpenShift come RH124/RH134.
 - `command_ok`, `user_exists`, `group_exists`, `package_installed`, `service_is_active`, `service_is_enabled`, `file_exists` — helper generici costruiti su `run()` per i controlli RHCSA più comuni.
+- `podman_container(name)`/`podman_image(name)` — `podman inspect` su un container/immagine, o `None` se non esiste. (Podman/DO188)
+- `container_is_running`, `container_networks`, `container_port_mappings`, `container_env`, `container_mounts` — letture mirate su un container gia' ispezionato via `podman_container`.
+- `podman_network_exists`, `podman_volume_exists`, `podman_volume_mountpoint` — presenza di rete/volume Podman, o il path host del volume.
+- `podman_exec(name, *args)`, `podman_logs(name)` — `podman exec`/`podman logs` su un container.
+- `ever_true(lab_name, check_name, currently_true)` — un check resta PASS anche dopo che il monitor rilancia `grade()` (un processo nuovo ad ogni poll, senza memoria del giro precedente) e nel frattempo lo stato che lo determinava è stato smontato da un passo successivo dell'esercizio. Azzerato ad ogni nuovo `lab start <lab_name>`.
+- `podman_events(since=, event=)` / `podman_ever_started(image=, name=, since=)` — leggono il registro eventi persistente di Podman: l'unico modo di sapere se un container `--rm` è mai esistito, anche se troppo effimero perché un poll a intervalli fissi lo veda mai in `podman ps`.
+- `attempt_started_at(lab_name)` — l'istante RFC3339 dell'ultimo `lab start <lab_name>`, da passare come `since` a `podman_events`/`podman_ever_started` per non ripescare eventi di un tentativo precedente.
 
-## Training libero: esercizi DO180 indipendenti da `lab`
+## Training libero: due curricula indipendenti da `lab`
 
 Oltre al grading delle guided exercise ufficiali (sopra), il repo include
 un secondo strumento, indipendente dal tool `lab` e dai materiali dei
-corsi Red Hat: un curriculum di **esercizi inventati**, che ricalcano gli
-argomenti del manuale DO180 (RHOCP 4.18) ma non sono le guided exercise
-originali. Pensato per esercitarsi quante volte si vuole, anche fuori da
-un classroom con `lab` installato — l'unico requisito e' un cluster
-OpenShift raggiungibile con `oc` e i permessi per creare progetti
-(self-provisioner, il default per l'utente `developer` di un classroom
-DO180).
+corsi Red Hat: due curricula di **esercizi inventati**, che ricalcano gli
+argomenti dei manuali DO180/DO188 ma non sono le guided exercise originali.
+Pensati per esercitarsi quante volte si vuole, anche fuori da un classroom
+con `lab` installato. Due tracce indipendenti (progresso salvato
+separatamente), a seconda di dove vive lo stato da gradare:
+
+- **DO180** (`start-training`) — stato su un cluster OpenShift: ogni
+  esercizio crea un progetto dedicato (`training-<slug>`), richiede un
+  cluster raggiungibile con `oc` e i permessi per creare progetti
+  (self-provisioner, il default per l'utente `developer` di un classroom
+  DO180).
+- **DO188** (`start-training-do188`) — stato Podman locale: ogni esercizio
+  crea/rimuove container, immagini, volumi e reti sulla workstation, senza
+  bisogno di alcun cluster (coerente col fatto che il manuale DO188, a parte
+  il capitolo 8, non tocca mai OpenShift — vedi [sotto](#do188-training-red-hat-openshift-development-i)).
+
+Il meccanismo grafico (`training_monitor.py`) e' lo stesso per entrambe: solo
+la directory degli esercizi cambia, passata con `training {start|list|goto|
+cleanup|reset} [do180|do188]` (default `do180` se omesso).
 
 ### Cosa fa
 
 ```bash
-start-training          # equivalente a 'training start'
+start-training          # traccia DO180 — equivalente a 'training start do180'
+start-training-do188    # traccia DO188 — equivalente a 'training start do188'
 ```
 
 Apre una finestra grafica che mostra **un esercizio alla volta**:
@@ -133,51 +165,65 @@ Apre una finestra grafica che mostra **un esercizio alla volta**:
    una PVC, o un pod rotto da riparare) — mai lo stato finale che lo
    studente deve raggiungere.
 2. Mostra il **testo del compito** e i comandi suggeriti (ogni esercizio
-   e' volutamente atomico: **massimo 2-3 comandi** `oc`).
-3. **Grada in polling** (ogni 8s di default) lo stato reale del cluster,
-   con gli stessi semafori PASS/FAIL del monitor di `lab grade`.
+   e' volutamente atomico: **massimo 2-3 comandi**, `oc` per DO180 o
+   `podman`/`podman-compose` per DO188).
+3. **Grada in polling** (ogni 8s di default) lo stato reale (cluster o
+   Podman locale), con gli stessi semafori PASS/FAIL del monitor di
+   `lab grade`.
 4. Un pulsante **"Esercizio successivo →"** (si tinge di verde quando
    tutti i check sono PASS, ma resta comunque cliccabile per saltare)
-   passa avanti nel curriculum; il progresso e' salvato in
-   `~/.local/share/training/progress.json` e viene ripreso automaticamente
-   la volta successiva che si lancia `start-training`.
+   passa avanti nel curriculum; il progresso e' salvato per traccia
+   (`~/.local/share/training/progress.json` per DO180,
+   `progress-exercises-do188.json` per DO188) e viene ripreso
+   automaticamente la volta successiva che si lancia `start-training`/
+   `start-training-do188`.
 
-**Pulizia automatica**: il progetto OpenShift dell'esercizio che si lascia
-viene cancellato sia passando al successivo sia chiudendo la finestra —
-non resta mai piu' di un progetto `training-*` alla volta sul cluster.
-Se la finestra viene interrotta in modo brusco (kill -9, crash, chiusura
-della VM) quella pulizia non puo' scattare: `training cleanup`
-(o `training reset`, che la richiama) e' la rete di sicurezza che
-cancella qualunque progetto di training residuo.
+**Pulizia automatica**: l'ambiente dell'esercizio che si lascia viene
+ripulito sia passando al successivo sia chiudendo la finestra, invocando
+`python3 <esercizio>.py cleanup` — e' il modulo stesso a sapere cosa
+significa (cancellare un progetto OpenShift per DO180, rimuovere
+container/immagini/volumi/reti Podman per DO188), non il monitor: non
+resta mai piu' di un ambiente `training-*` alla volta. Se la finestra viene
+interrotta in modo brusco (kill -9, crash, chiusura della VM) quella
+pulizia non puo' scattare: `training cleanup` (o `training reset`, che la
+richiama) e' la rete di sicurezza che ripulisce qualunque ambiente di
+training residuo, per la traccia scelta.
 
-Altri comandi:
+Altri comandi (il secondo argomento `do180`/`do188` e' opzionale, default `do180`):
 
 ```bash
-training list        # elenca tutti gli esercizi disponibili e a che punto sei
-training goto <N>     # salta direttamente all'esercizio N (1-based)
-training cleanup      # cancella eventuali progetti di training residui sul cluster
-training reset        # azzera i progressi e fa anche 'training cleanup'
+training list [do180|do188]     # elenca tutti gli esercizi disponibili e a che punto sei
+training goto [do180|do188] <N|nome> # salta direttamente all'esercizio N (1-based) o per nome/slug (es. c5-02-storage-pvc, anche parziale)
+training cleanup [do180|do188]  # ripulisce eventuali ambienti di training residui
+training reset [do180|do188]    # azzera i progressi e fa anche 'training cleanup'
 ```
 
 ### Struttura di un esercizio
 
-Ogni file in `training/exercises/<capNN>-<slug>.py` e' un modulo
-autonomo che espone:
+Ogni file in `training/exercises/<capNN>-<slug>.py` (DO180) o
+`training/exercises-do188/<capNN>-<slug>.py` (DO188) e' un modulo autonomo
+che espone:
 
-- `CHAPTER`/`TITLE`/`PROJECT` — metadati mostrati nella finestra.
+- `CHAPTER`/`TITLE`/`PROJECT` — metadati mostrati nella finestra (`PROJECT`
+  e' `None` per gli esercizi DO188: non c'e' un progetto OpenShift).
 - `TASK` — il testo del compito con i comandi suggeriti.
-- `setup()` — (ri)crea lo stato di partenza nel progetto dedicato
-  (idempotente: richiamabile piu' volte, es. da "Ricomincia esercizio").
+- `setup()` — (ri)crea lo stato di partenza (progetto OpenShift dedicato per
+  DO180, container/immagini/volumi Podman per DO188; idempotente,
+  richiamabile piu' volte, es. da "Ricomincia esercizio").
 - `grade()` — un blocco `GradingStep` per ogni criterio, stesso stile e
   stesso output testuale `PASS`/`FAIL <titolo>` degli script in
   `lab-custom-grading/` (vedi `training/_training_common.py`, che riusa
-  `GradingStep`/`oc_get_json`/`project_exists` da `_common.py`).
+  `GradingStep`/`oc_get_json`/`project_exists`/`podman_*` da `_common.py`).
+- `cleanup()` — rimuove lo stato creato da `setup()`. Opzionale: se un
+  modulo non la passa a `run_cli()`, si ricade sul vecchio comportamento
+  (cancellare il progetto OpenShift in `PROJECT`) per compatibilita' con
+  gli esercizi DO180 scritti prima che `cleanup()` esistesse.
 
 Il monitor (`bin/training_monitor.py`) invoca ciascuna fase come processo
-separato (`python3 <file>.py setup|grade`), esattamente come il wrapper
-`lab` fa per gli script di `lab-custom-grading/`.
+separato (`python3 <file>.py setup|grade|cleanup`), esattamente come il
+wrapper `lab` fa per gli script di `lab-custom-grading/`.
 
-### Argomenti coperti (29 esercizi: Cap. 2-7 del manuale DO180 + Extra)
+### DO180 training: 29 esercizi (Cap. 2-7 del manuale DO180 + Extra)
 
 Il Cap. 1 (console web, monitoraggio) non e' incluso: sono attivita'
 puramente esplorative senza uno stato verificabile via `oc`, stesso
@@ -255,6 +301,90 @@ PASS). Alcune note emerse dai test, gia' rispecchiate nel codice:
 6. Rilancia `bash install.sh` per propagare il nuovo file a
    `~/.local/share/training/exercises/`.
 
+### DO188 training: Red Hat OpenShift Development I
+
+Stessa filosofia della traccia DO180 (esercizi inventati, atomici, mai lo
+stato finale nel `setup()`), ma per un corso completamente diverso: **DO188
+(Red Hat OpenShift Development I: Introduction to Containers with Podman)**,
+RHOCP4.22 edition 2 — che a parte l'ultimo capitolo non tocca mai un
+cluster OpenShift — lo stato e' interamente Podman locale sulla workstation
+(container, immagini, volumi, reti). Per questo l'unico requisito e' avere
+`podman` funzionante: nessun cluster, nessun login `oc`.
+
+12 esercizi, Cap. 2-7 del manuale (il Cap. 8, "Container Orchestration with
+OpenShift and Kubernetes", richiede invece un cluster — non ancora coperto,
+vedi nota sotto):
+
+- **Cap. 2 — Podman Basics**: avvia un container pubblicando una porta
+  (`c2-01`), crea una rete Podman e collega due container verificando la
+  risoluzione DNS per nome servizio (`c2-02`), ferma un container
+  mantenendolo nell'elenco (`c2-03`).
+- **Cap. 3 — Container Images**: scarica e tagga un'immagine (`c3-01`),
+  archiviala in un tar e rimuovi il tag locale — `podman save`/`rmi`
+  (`c3-02`).
+- **Cap. 4 — Custom Container Images**: scrivi un Containerfile e
+  costruisci un'immagine, verificata FUNZIONALMENTE eseguendo un container
+  da quell'immagine (non solo controllando che il tag esista) (`c4-01`);
+  verifica il mapping UID rootless con `podman top huser` — root dentro il
+  container, utente non privilegiato sull'host (`c4-02`).
+- **Cap. 5 — Persisting Data**: crea un volume nominato e scrivici dati da
+  un container, letti poi direttamente dal Mountpoint sull'host (`c5-01`);
+  avvia un database MySQL con variabili d'ambiente e volume dedicato,
+  verificato con una query reale — non solo "container running" (`c5-02`).
+- **Cap. 6 — Troubleshooting Containers**: diagnostica dai log un container
+  che si ferma per un comando sbagliato e avvia una versione corretta
+  (`c6-01`); esponi la porta di debug Node.js (`--inspect`) con bind mount
+  del codice applicativo, verificando che il debugger sia davvero in
+  ascolto — non solo la struttura del container (`c6-02`).
+- **Cap. 7 — Multi-container Applications with Compose**: scrivi un
+  `compose.yaml` con due servizi e avvialo con `podman-compose up -d`,
+  verificando che si raggiungano per nome sulla rete condivisa (`c7-01`).
+
+Tutti i 12 esercizi sono stati verificati dal vivo su questa workstation
+(stato "non risolto" → FAIL, soluzione manuale → PASS, poi cleanup). Alcune
+note emerse dai test, gia' rispecchiate nel codice:
+
+- Il backend di rete rootless di default qui e' `pasta`
+  (`rootlessNetworkCmd: pasta`, verificato con `podman info`): l'IP di un
+  container su una rete bridge utente **non** e' raggiungibile dall'host
+  (un primo tentativo di `c2-02` che curlava l'IP del container dall'host
+  falliva sempre con connessione rifiutata). Solo la connettivita'
+  container-to-container per nome funziona in modo affidabile — `c2-02`
+  gradua quella; per l'accesso da host serve pubblicare la porta con `-p`
+  (vedi `c2-01`).
+- L'immagine `registry.access.redhat.com/ubi9/httpd-24` non usa il comando
+  `httpd-foreground` (presente in altre immagini httpd simili): il comando
+  di avvio reale e' `run-httpd`, verificato con `podman inspect
+  --format '{{.Config.Cmd}}'` prima di scrivere `c6-01`.
+- `podman rm -f` da solo **non** rimuove i volumi anonimi che alcune
+  immagini creano in aggiunta a quelli nominati esplicitamente (es.
+  l'immagine ufficiale `mysql`, osservato mentre si testava `c5-02`):
+  `podman_reset()` in `_training_common.py` usa sempre `rm -f -v`.
+- I container creati da `podman-compose` sono identificati per label
+  (`com.docker.compose.project`/`.service`) in `c7-01`, non per nome esatto:
+  lo schema di naming (`<project>_<service>_1`) e' un dettaglio di
+  implementazione non garantito stabile fra versioni di `podman-compose`.
+- Un round-trip completo `save`→`rmi`→`load` non sarebbe verificabile a
+  posteriori (lo stato finale sarebbe identico a quello di partenza,
+  indistinguibile da chi non ha mai eseguito `rmi`): `c3-02` gradua invece
+  `save`→`rmi` (tar presente, tag locale assente), uno stato finale
+  univoco — bug di progettazione scoperto e corretto testando lo script
+  dal vivo, non solo a tavolino.
+
+**Cap. 8 (Container Orchestration with OpenShift and Kubernetes)**: non
+ancora coperto da questa traccia — richiede un cluster OpenShift
+raggiungibile, non disponibile al momento della scrittura di questi 12
+esercizi. Concettualmente sovrapposto ai Cap. 2-4 gia' coperti dalla traccia
+DO180 (`c4-01`..`c4-05` creano/espongono/scalano Deployment); da aggiungere
+come `c8-*` in `training/exercises-do188/` quando un cluster sara'
+disponibile per il test dal vivo (stesso vincolo del Cap. 4 sopra: mai
+inventare un valore senza verificarlo).
+
+Estendere questa traccia: stessa procedura della traccia DO180 (vedi sopra),
+ma i file vanno in `training/exercises-do188/<capNN>-<slug>.py`, e
+`setup()`/`cleanup()` usano `podman_reset()`/`podman()` invece di
+`reset_project()`/`oc()` da `_training_common.py`.
+
 ## Esercizi coperti
 
 ### DO180 (Red Hat OpenShift Administration I)
@@ -273,6 +403,63 @@ Script di grading scritti (in `lab-custom-grading/`):
 Esercizi guidati **senza** grading ufficiale né custom (giudicati non gradabili in modo oggettivo: sono esercizi puramente esplorativi da CLI/console, senza uno stato — nemmeno temporaneo — univoco sul cluster, oppure privi di materiali sufficienti a dedurre una specifica): `cli-health`, `cli-interfaces`, `cli-resources`, `deploy-workloads`, `intro-monitor`, `pods-images`, `storage-classes`, `reliability-ha`, `updates-ids`. **Da riverificare con il testo della guida** (lo stesso errore di giudizio di `pods-containers` — dedotto senza leggere il manuale — potrebbe valere anche per alcuni di questi).
 
 `deploy-routes.py` e' un caso particolare: nessuna `materials/solutions` ne' `resources.txt`, ma il modulo ufficiale (`start()`) usa un progetto diverso dal nome esercizio (`web-applications`) e verifica la disponibilita' dell'immagine `redhattraining/do180-httpd-app:v1`; il file di partenza `index.php` incluso in quell'immagine stampa un testo fisso e verificabile via HTTP. Verificato dal vivo contro il cluster reale di questa classe: lo studente espone due app con quell'immagine, una con una Route diretta (`oc expose`) e una tramite una risorsa Ingress — il grading cerca entrambe per caratteristiche (Route generata o no da un Ingress + contenuto HTTP atteso), non per nome fisso, dato che i nomi di app/service/route sono a scelta dello studente.
+
+### DO188 (Red Hat OpenShift Development I)
+
+Script di grading scritti (in `lab-custom-grading/`), 23 esercizi/lab
+guidati — commit `f43fdae`, che aggiunge anche gli helper Podman condivisi
+(`podman_container`, `podman_image`, `container_is_running`,
+`container_networks`, `container_port_mappings`, `container_env`,
+`container_mounts`, `podman_exec`, `podman_logs`, ecc.) a `_common.py`:
+
+- `basics-podman`, `basics-accessing`, `basics-exposing` — Podman Basics
+- `basics-creating` (2.2), `basics-lifecycle` (2.10) — Podman Basics, aggiunti in una sessione successiva (vedi nota sotto)
+- `images-basics`, `images-lab`, `images-managing` — Container Images
+- `custom-containerfiles`, `custom-rootless`, `custom-advanced`, `custom-lab` — Custom Container Images
+- `persisting-mounting`, `persisting-databases`, `persisting-lab` — Persisting Data
+- `troubleshooting-logging`, `troubleshooting-debugging`, `troubleshooting-lab`, `networking-lab` — Troubleshooting Containers
+- `compose-environments`, `compose-lab` — Multi-container Applications with Compose
+- `openshift-applications`, `openshift-multipod`, `openshift-lab` — Container Orchestration with OpenShift and Kubernetes
+- `comprehensive-review` — Comprehensive Review (Cap. 9)
+
+**Nota**: a differenza delle altre sezioni di questo file, i 23 script
+originali (tutti tranne `basics-creating`/`basics-lifecycle`) sono stati
+scritti in una sessione precedente e non sono mai stati documentati qui
+prima d'ora (la lacuna e' stata scoperta e colmata insieme all'aggiunta
+della traccia di training DO188, vedi sopra) — il raggruppamento per
+capitolo sopra riflette la convenzione di naming dei file, non e' stato
+riverificato riga per riga contro il testo della guida in questa sessione.
+
+**`basics-creating`/`basics-lifecycle`** erano stati inizialmente segnati
+come "intenzionalmente esclusi" (la sessione originale non aveva accesso al
+testo della guida ed e' partita dal presupposto che entrambe finissero senza
+stato persistente): letto il testo integrale fornito dall'utente, in realta'
+`basics-creating` lascia un container httpd in esecuzione in background fino
+a `lab finish` (gradato "sul momento", stesso pattern di `pods-containers`
+in DO180), e `basics-lifecycle` fa passare un container di nome `httpd` per
+quattro fasi in sequenza (creato+avviato → fermato → riavviato → rimosso
+forzatamente), ognuna delle quali smonta la precedente. Per le fasi
+intermedie che il passo successivo distrugge, un controllo dello stato
+ATTUALE non basta: `_common.py` offre ora due primitive per un check che
+resta PASS anche dopo che lo stato verificato e' stato smontato, entrambe
+azzerate ad ogni nuovo `lab start <nome-lab>` (vedi `bashrc.d/
+lab-grade-monitor.sh`) cosi' un tentativo nuovo riparte da zero:
+
+- `ever_true(lab_name, check_name, currently_true)` — persiste su disco un
+  check gia' visto vero in un poll precedente (generico, ma richiede che lo
+  stato sia durato abbastanza da essere colto da almeno un poll dal vivo,
+  es. un container lasciato acceso per qualche secondo/minuto — usato da
+  `basics-lifecycle`, via il registro eventi sotto, non direttamente da
+  questa funzione in questo caso specifico).
+- `podman_ever_started(image=, name=, since=)` / `podman_events(since=,
+  event=)` — legge il registro EVENTI di Podman (persistente, non basato su
+  polling): indispensabile per un container `--rm` che vive troppo poco
+  perche' un poll a intervalli fissi possa mai "vederlo" (`basics-creating`
+  1.3: `podman run --rm <img> cat /etc/os-release`, finito in una frazione
+  di secondo — verificato dal vivo: non compare mai in `podman ps -a`, ma
+  resta registrato in `podman events`). `basics-lifecycle` lo usa per
+  contare gli eventi `start`/`died`/`restart`/`remove` del container
+  `httpd` durante l'intero tentativo, non solo l'ultimo stato osservato.
 
 ### DO280 (Red Hat OpenShift Administration II)
 

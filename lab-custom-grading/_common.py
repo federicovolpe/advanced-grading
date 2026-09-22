@@ -324,6 +324,112 @@ def podman_logs(name, sudo=False):
     return result.stdout + result.stderr
 
 
+# --- Verificare uno stato "sul momento" o "gia' smontato" -----------------
+# Il monitor grafico rilancia grade() come processo NUOVO ad ogni poll (ogni
+# 30s per default): uno script non ha memoria di cosa ha visto nel giro
+# precedente. Per un compito guidato che chiede di creare qualcosa e poi
+# smontarlo in un passo successivo (es. basics-creating/basics-lifecycle di
+# DO188: crea un container, verificalo, poi fermalo/rimuovilo), un semplice
+# controllo dello stato ATTUALE farebbe tornare FAIL un passo gia' completato
+# correttamente solo perche' il passo successivo lo ha smontato. Due
+# strumenti complementari per questo, entrambi con ambito il singolo
+# tentativo (azzerati ad ogni nuovo 'lab start', vedi bashrc.d/
+# lab-grade-monitor.sh):
+#
+# 1. ever_true() — persiste su disco un check gia' visto vero in un poll
+#    precedente. Generico (qualunque condizione), ma richiede che lo stato
+#    sia durato abbastanza da essere catturato da ALMENO un poll dal vivo
+#    (va bene per uno stato che dura secondi/minuti, es. un container
+#    lasciato in esecuzione mentre lo studente verifica qualcosa in un
+#    browser).
+# 2. podman_ever_started()/podman_events() — legge il registro EVENTI di
+#    Podman (persistente, non basato su polling): indispensabile per un
+#    container creato con --rm che vive troppo poco perche' un poll a
+#    intervalli fissi possa mai "vederlo" (es. `podman run --rm <img> cat
+#    /etc/os-release`, finito in una frazione di secondo) — verificato dal
+#    vivo: un container del genere non compare mai in 'podman ps -a', ma
+#    resta comunque registrato in 'podman events'.
+
+ATTEMPT_STATE_DIR = os.path.expanduser("~/.grading/custom-state")
+
+
+def attempt_started_at(lab_name):
+    """Ritorna il timestamp RFC3339 (UTC) dell'ultimo 'lab start <lab_name>',
+    scritto dal wrapper bash, o None se assente (es. script lanciato a mano
+    per un test, fuori dal flusso 'lab start'). Passalo come 'since' a
+    podman_events()/podman_ever_started() per non ripescare eventi di un
+    tentativo precedente allo stesso esercizio."""
+    path = os.path.join(ATTEMPT_STATE_DIR, f"{lab_name}.started_at")
+    try:
+        with open(path) as fh:
+            return fh.read().strip() or None
+    except OSError:
+        return None
+
+
+def ever_true(lab_name, check_name, currently_true):
+    """True se 'currently_true' e' vero ORA, oppure lo era gia' in un poll
+    precedente per questo esercizio+check (persistito su disco). Il wrapper
+    bash cancella questo stato ad ogni nuovo 'lab start <lab_name>', quindi
+    un tentativo nuovo riparte sempre da zero. check_name puo' essere
+    qualunque stringa descrittiva (usata solo per costruire il nome del file
+    di stato, non mostrata da nessuna parte)."""
+    import re
+
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", check_name)
+    path = os.path.join(ATTEMPT_STATE_DIR, f"{lab_name}.{safe}.seen")
+    if currently_true:
+        os.makedirs(ATTEMPT_STATE_DIR, exist_ok=True)
+        open(path, "w").close()
+        return True
+    return os.path.exists(path)
+
+
+def podman_events(since=None, event=None, sudo=False):
+    """Ritorna gli eventi Podman (create/init/start/died/restart/remove/...)
+    come lista di dict (via 'podman events --format json', NDJSON — un
+    oggetto per riga), l'UNICO modo affidabile di sapere se un container e'
+    esistito in passato anche se gia' rimosso. 'since' accetta lo stesso
+    formato di 'podman events --since' (timestamp RFC3339, es. da
+    attempt_started_at(), o una durata relativa tipo '10m').
+
+    Il filtro '--filter image=...' di Podman non sembra matchare in modo
+    affidabile (verificato dal vivo: nessun risultato anche con l'immagine
+    esatta presente nell'evento) — per questo filtriamo per immagine/nome
+    lato Python sui dict ritornati, non passando --filter image a Podman."""
+    args = ["events", "--stream=false", "--format", "json"]
+    if since:
+        args += ["--since", since]
+    if event:
+        args += ["--filter", f"event={event}"]
+    result = subprocess.run(_podman_cmd(args, sudo=sudo), capture_output=True, text=True)
+    events = []
+    for line in result.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            events.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return events
+
+
+def podman_ever_started(image=None, name=None, since=None, sudo=False):
+    """True se un container e' STATO AVVIATO almeno una volta (anche se gia'
+    terminato/rimosso, es. con --rm) da 'since' in poi. Filtra per immagine
+    e/o nome esatti quando forniti."""
+    for ev in podman_events(since=since, event="start", sudo=sudo):
+        if ev.get("Type") != "container":
+            continue
+        if image and ev.get("Image") != image:
+            continue
+        if name and ev.get("Name") != name:
+            continue
+        return True
+    return False
+
+
 def http_get(url, timeout=5):
     """Esegue una GET con curl (nessuna dipendenza extra tipo `requests`).
     Ritorna (ok, body): ok è True solo se la richiesta HTTP ha avuto successo

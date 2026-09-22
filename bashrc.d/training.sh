@@ -1,18 +1,38 @@
-# Comandi per il curriculum di training "libero" DO180 (indipendente dal
-# tool ufficiale `lab`: esercizi inventati, non le guided exercise vere e
-# proprie, vedi README.md in questo repo). Ogni esercizio crea da solo il
-# proprio ambiente di partenza in un progetto OpenShift dedicato
-# (training-<slug>) e viene gradato con polling automatico in una finestra
-# grafica, con un pulsante per passare al successivo. Il progetto
-# dell'esercizio che si lascia viene cancellato automaticamente sia
-# passando al successivo sia chiudendo la finestra (training_monitor.py);
+# Comandi per i curricula di training "liberi" (indipendenti dal tool
+# ufficiale `lab`: esercizi inventati, non le guided exercise vere e proprie,
+# vedi README.md in questo repo). Due tracce indipendenti, ciascuna col
+# proprio progresso salvato:
+#   do180 (default) — stato su un progetto OpenShift dedicato per esercizio
+#                      (training-<slug>), richiede un cluster raggiungibile.
+#   do188            — stato locale Podman (container/immagini/volumi/reti
+#                      sulla workstation), nessun cluster richiesto.
+# Ogni esercizio viene gradato con polling automatico in una finestra
+# grafica, con un pulsante per passare al successivo. L'ambiente
+# dell'esercizio che si lascia viene ripulito automaticamente sia passando
+# al successivo sia chiudendo la finestra (training_monitor.py);
 # 'training cleanup'/'reset' sono solo una rete di sicurezza per chi la
 # finestra l'ha chiusa in modo brusco (kill -9, crash, spegnimento della
 # VM), quando quella pulizia automatica non ha potuto scattare.
 
+_training_exercises_dir() {
+    case "$1" in
+        do188) echo "$HOME/.local/share/training/exercises-do188" ;;
+        do180) echo "$HOME/.local/share/training/exercises" ;;
+        *) return 1 ;;
+    esac
+}
+
 training() {
     local subcmd="${1:-start}"
-    local dir="$HOME/.local/share/training"
+    shift || true
+
+    local course="do180"
+    if [[ "${1:-}" == "do180" || "${1:-}" == "do188" ]]; then
+        course="$1"
+        shift
+    fi
+    local exdir
+    exdir="$(_training_exercises_dir "$course")" || { echo "Corso sconosciuto: $course"; return 1; }
 
     case "$subcmd" in
         start)
@@ -25,38 +45,40 @@ training() {
                 echo "Chiedi a un amministratore: sudo dnf install python3-tkinter -y"
                 return 1
             fi
-            # Una sola finestra di training per volta.
+            # Una sola finestra di training per volta (qualunque traccia).
             pkill -f "training_monitor\.py" >/dev/null 2>&1
-            nohup python3 "$HOME/.local/bin/training_monitor.py" "${@:2}" >/dev/null 2>&1 &
+            nohup python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" "$@" >/dev/null 2>&1 &
             disown
-            echo "Finestra di training avviata (progressi salvati in $dir/progress.json)."
+            echo "Finestra di training avviata (traccia: $course)."
             ;;
         list)
-            python3 "$HOME/.local/bin/training_monitor.py" --list
+            python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" --list
             ;;
         goto)
-            if [[ -z "${2:-}" ]]; then
-                echo "Uso: training goto <numero-esercizio>"
+            if [[ -z "${1:-}" ]]; then
+                echo "Uso: training goto [do180|do188] <numero-esercizio|nome-esercizio>"
                 return 1
             fi
-            training start --goto "$2"
+            training start "$course" --goto "$1"
             ;;
         cleanup)
-            python3 "$HOME/.local/bin/training_monitor.py" --cleanup
+            python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" --cleanup
             ;;
         reset)
-            rm -f "$dir/progress.json"
-            echo "Progressi azzerati: 'training start' ripartira' dal primo esercizio."
-            python3 "$HOME/.local/bin/training_monitor.py" --cleanup
+            python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" --reset
             ;;
         *)
-            echo "Uso: training {start|list|goto <N>|cleanup|reset}"
+            echo "Uso: training {start|list|goto <N|nome>|cleanup|reset} [do180|do188]"
             return 1
             ;;
     esac
 }
 
-# Alias piu' immediato per chi si aspetta letteralmente "start training".
+# Alias piu' immediati per chi si aspetta letteralmente "start training".
 start-training() {
-    training start "$@"
+    training start do180 "$@"
+}
+
+start-training-do188() {
+    training start do188 "$@"
 }
