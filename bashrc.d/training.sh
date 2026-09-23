@@ -47,7 +47,7 @@ training() {
             fi
             # Una sola finestra di training per volta (qualunque traccia).
             pkill -f "training_monitor\.py" >/dev/null 2>&1
-            nohup python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" "$@" >/dev/null 2>&1 &
+            nohup python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" "$@" </dev/null >/dev/null 2>&1 &
             disown
             echo "Finestra di training avviata (traccia: $course)."
             ;;

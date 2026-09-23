@@ -289,8 +289,15 @@ class LabGradeMonitor:
             # parse_grade_result_jsonl). Un piccolo margine assorbe eventuale
             # skew d'orologio quando si gira via --host/ssh.
             not_before = datetime.now(timezone.utc) - timedelta(seconds=5)
+            # stdin=DEVNULL esplicito: lanciato da 'nohup' con stdin su un
+            # terminale, questo processo eredita un /dev/null aperto in SOLA
+            # SCRITTURA come fd 0. Il binario 'lab' esegue il grading dentro
+            # 'script' (pty), che leggendo quello stdin riceve EBADF ed esce
+            # subito: 'lab grade' stampa solo il banner "Running: ..." e
+            # nessun check (ne' riga nel JSONL), per qualunque esercizio.
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=120
+                cmd, capture_output=True, text=True, timeout=120,
+                stdin=subprocess.DEVNULL,
             )
             # Non scartare uno stream a favore dell'altro: a volte il banner
             # "Running: ..." finisce su stdout mentre i dettagli di un

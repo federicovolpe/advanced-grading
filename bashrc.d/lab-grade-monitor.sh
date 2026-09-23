@@ -115,7 +115,10 @@ lab() {
     # esercizio (o uno stato pre-reset, ormai stale).
     pkill -f "lab_grade_monitor\.py " >/dev/null 2>&1
 
-    nohup python3 "$HOME/.local/bin/lab_grade_monitor.py" "$lab_name" >/dev/null 2>&1 &
+    # '</dev/null' esplicito: se stdin resta il terminale, nohup lo
+    # sostituisce con un /dev/null in sola scrittura, che fa uscire subito
+    # lo 'script' usato internamente da 'lab grade' (nessun check in output).
+    nohup python3 "$HOME/.local/bin/lab_grade_monitor.py" "$lab_name" </dev/null >/dev/null 2>&1 &
     disown
 
     return $status
