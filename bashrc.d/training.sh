@@ -6,6 +6,8 @@
 #                      (training-<slug>), richiede un cluster raggiungibile.
 #   do188            — stato locale Podman (container/immagini/volumi/reti
 #                      sulla workstation), nessun cluster richiesto.
+#   try-exam         — simulazione d'esame DO188 (stato Podman locale), senza
+#                      comandi suggeriti nel testo degli esercizi.
 # Ogni esercizio viene gradato con polling automatico in una finestra
 # grafica, con un pulsante per passare al successivo. L'ambiente
 # dell'esercizio che si lascia viene ripulito automaticamente sia passando
@@ -17,6 +19,7 @@
 _training_exercises_dir() {
     case "$1" in
         do188) echo "$HOME/.local/share/training/exercises-do188" ;;
+        try-exam) echo "$HOME/.local/share/training/exercises-try-exam" ;;
         do180) echo "$HOME/.local/share/training/exercises" ;;
         *) return 1 ;;
     esac
@@ -27,7 +30,7 @@ training() {
     shift || true
 
     local course="do180"
-    if [[ "${1:-}" == "do180" || "${1:-}" == "do188" ]]; then
+    if [[ "${1:-}" == "do180" || "${1:-}" == "do188" || "${1:-}" == "try-exam" ]]; then
         course="$1"
         shift
     fi
@@ -56,7 +59,7 @@ training() {
             ;;
         goto)
             if [[ -z "${1:-}" ]]; then
-                echo "Uso: training goto [do180|do188] <numero-esercizio|nome-esercizio>"
+                echo "Uso: training goto [do180|do188|try-exam] <numero-esercizio|nome-esercizio>"
                 return 1
             fi
             training start "$course" --goto "$1"
@@ -68,7 +71,7 @@ training() {
             python3 "$HOME/.local/bin/training_monitor.py" --exercises-dir "$exdir" --reset
             ;;
         *)
-            echo "Uso: training {start|list|goto <N|nome>|cleanup|reset} [do180|do188]"
+            echo "Uso: training {start|list|goto <N|nome>|cleanup|reset} [do180|do188|try-exam]"
             return 1
             ;;
     esac
@@ -81,4 +84,8 @@ start-training() {
 
 start-training-do188() {
     training start do188 "$@"
+}
+
+start-try-exam() {
+    training start try-exam "$@"
 }

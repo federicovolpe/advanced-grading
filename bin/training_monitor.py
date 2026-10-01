@@ -116,6 +116,9 @@ def load_exercises(exercises_dir):
             "title": ns.get("TITLE", fname),
             "project": ns.get("PROJECT", "?"),
             "task": ns.get("TASK", ""),
+            # Esercizi che al primo setup scaricano/costruiscono immagini
+            # pesanti (traccia try-exam) possono chiedere piu' tempo.
+            "setup_timeout": ns.get("SETUP_TIMEOUT", 180),
         })
     return exercises
 
@@ -304,7 +307,7 @@ class TrainingMonitor:
         try:
             subprocess.run(
                 ["python3", self.current["file"], "setup"],
-                capture_output=True, text=True, timeout=180,
+                capture_output=True, text=True, timeout=self.current["setup_timeout"],
             )
             error = None
         except Exception as exc:

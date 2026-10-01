@@ -20,7 +20,7 @@ BASHRC_D_DIR="$HOME/.bashrc.d"
 GRADING_DIR="$HOME/.local/share/lab-custom-grading"
 TRAINING_DIR="$HOME/.local/share/training"
 
-mkdir -p "$BIN_DIR" "$BASHRC_D_DIR" "$GRADING_DIR" "$TRAINING_DIR/exercises" "$TRAINING_DIR/exercises-do188"
+mkdir -p "$BIN_DIR" "$BASHRC_D_DIR" "$GRADING_DIR" "$TRAINING_DIR/exercises" "$TRAINING_DIR/exercises-do188" "$TRAINING_DIR/exercises-try-exam"
 
 install -m 755 "$SCRIPT_DIR/bin/lab_grade_monitor.py" "$BIN_DIR/lab_grade_monitor.py"
 install -m 755 "$SCRIPT_DIR/bin/training_monitor.py" "$BIN_DIR/training_monitor.py"
@@ -38,6 +38,9 @@ done
 for f in "$SCRIPT_DIR"/training/exercises-do188/*.py; do
     install -m 644 "$f" "$TRAINING_DIR/exercises-do188/$(basename "$f")"
 done
+for f in "$SCRIPT_DIR"/training/exercises-try-exam/*.py; do
+    install -m 644 "$f" "$TRAINING_DIR/exercises-try-exam/$(basename "$f")"
+done
 
 echo "Installati/aggiornati:"
 echo "  - $BIN_DIR/lab_grade_monitor.py"
@@ -47,6 +50,7 @@ echo "  - $BASHRC_D_DIR/training.sh"
 echo "  - $GRADING_DIR/*.py ($(ls "$SCRIPT_DIR"/lab-custom-grading/*.py | wc -l) script di grading)"
 echo "  - $TRAINING_DIR/exercises/*.py ($(ls "$SCRIPT_DIR"/training/exercises/*.py | wc -l) esercizi di training DO180)"
 echo "  - $TRAINING_DIR/exercises-do188/*.py ($(ls "$SCRIPT_DIR"/training/exercises-do188/*.py | wc -l) esercizi di training DO188)"
+echo "  - $TRAINING_DIR/exercises-try-exam/*.py ($(ls "$SCRIPT_DIR"/training/exercises-try-exam/e*.py | wc -l) esercizi della simulazione d'esame)"
 
 if ! python3 -c "import tkinter" >/dev/null 2>&1; then
     echo
@@ -58,4 +62,4 @@ fi
 echo
 echo "Fatto. Apri un nuovo terminale (o esegui 'source ~/.bashrc') perche'"
 echo "il wrapper 'lab' (start/grade) e i comandi 'start-training' (DO180) /"
-echo "'start-training-do188' (DO188) siano attivi nella shell corrente."
+echo "'start-training-do188' (DO188) / 'start-try-exam' siano attivi nella shell corrente."

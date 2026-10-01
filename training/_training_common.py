@@ -256,6 +256,52 @@ def parse_quantity(value):
         return None
 
 
+def podman_attached_clients(name):
+    """Ritorna le command line dei processi client `podman` ancora agganciati
+    al container (run senza -d, start -a, attach). `podman inspect` non
+    registra se un container e' stato avviato con -d (Config.AttachStdout &
+    co. risultano False in entrambi i casi, verificato dal vivo su podman
+    5.8): l'unico segnale oggettivo di "non staccato dalla CLI" e' che il
+    processo client stia ancora girando nel terminale dello studente."""
+    c = podman_container(name)
+    ids = {name}
+    if c:
+        ids.add(c.get("Id", ""))
+        ids.add(c.get("Id", "")[:12])
+    clients = []
+    for pid in os.listdir("/proc"):
+        if not pid.isdigit():
+            continue
+        try:
+            with open(f"/proc/{pid}/cmdline", "rb") as fh:
+                argv = [a.decode(errors="replace") for a in fh.read().split(b"\0") if a]
+        except OSError:
+            continue
+        if not argv or os.path.basename(argv[0]) != "podman" or len(argv) < 2:
+            continue
+        words = argv[1:]
+        if not any(w in ids or w == f"--name={name}" for w in words):
+            continue
+        sub = words[0]
+        if sub in ("container",) and len(words) > 1:
+            sub, words = words[1], words[1:]
+        flags = words[1:]
+        # -d puo' comparire anche raggruppato con altri flag corti (-dit, -itd).
+        detached = any(
+            f in ("--detach", "--detach=true")
+            or (f.startswith("-") and not f.startswith("--") and "=" not in f and "d" in f[1:])
+            for f in flags
+        )
+        attached = (
+            (sub == "run" and not detached)
+            or (sub == "start" and any(f in ("-a", "--attach") for f in flags))
+            or sub == "attach"
+        )
+        if attached:
+            clients.append(" ".join(argv))
+    return clients
+
+
 def run_cli(setup_fn, grade_fn, cleanup_fn=None):
     """Entry point standard di ogni modulo esercizio:
         python3 <esercizio>.py setup

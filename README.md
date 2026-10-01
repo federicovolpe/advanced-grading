@@ -53,6 +53,7 @@ bash /tmp/do180-lab-grading/install.sh
 | `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training`/`start-training-do188` |
 | `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero DO180 |
 | `training/exercises-do188/*.py` | `~/.local/share/training/exercises-do188/` | Esercizi del training libero DO188 (stato Podman locale) |
+| `training/exercises-try-exam/*.py` | `~/.local/share/training/exercises-try-exam/` | Simulazione d'esame DO188 (`start-try-exam`) |
 
 ## Come funziona il wrapper
 
@@ -145,16 +146,20 @@ separatamente), a seconda di dove vive lo stato da gradare:
   crea/rimuove container, immagini, volumi e reti sulla workstation, senza
   bisogno di alcun cluster (coerente col fatto che il manuale DO188, a parte
   il capitolo 8, non tocca mai OpenShift — vedi [sotto](#do188-training-red-hat-openshift-development-i)).
+- **try-exam** (`start-try-exam`) — simulazione d'esame DO188, stato Podman
+  locale: 6 esercizi più lunghi, senza comandi suggeriti — vedi
+  [sotto](#try-exam-simulazione-desame-do188).
 
 Il meccanismo grafico (`training_monitor.py`) e' lo stesso per entrambe: solo
 la directory degli esercizi cambia, passata con `training {start|list|goto|
-cleanup|reset} [do180|do188]` (default `do180` se omesso).
+cleanup|reset} [do180|do188|try-exam]` (default `do180` se omesso).
 
 ### Cosa fa
 
 ```bash
 start-training          # traccia DO180 — equivalente a 'training start do180'
 start-training-do188    # traccia DO188 — equivalente a 'training start do188'
+start-try-exam          # simulazione d'esame — equivalente a 'training start try-exam'
 ```
 
 Apre una finestra grafica che mostra **un esercizio alla volta**:
@@ -404,6 +409,36 @@ Estendere questa traccia: stessa procedura della traccia DO180 (vedi sopra),
 ma i file vanno in `training/exercises-do188/<capNN>-<slug>.py`, e
 `setup()`/`cleanup()` usano `podman_reset()`/`podman()` invece di
 `reset_project()`/`oc()` da `_training_common.py`.
+
+### Try-exam: simulazione d'esame DO188
+
+`training/exercises-try-exam/` riproduce un tema d'esame DO188 annotato a
+memoria: 6 esercizi, ognuno con più richieste (container nginx con bind
+mount, `podman cp` + `nginx -s reload`, due container con variabili
+d'ambiente, Containerfile con `ARG`/`ENV`/`COPY` e build con
+`--build-arg`, rete + volumi + database, troubleshooting WordPress +
+MariaDB). A differenza delle altre tracce il testo non suggerisce i comandi.
+
+- **Immagini del tema**: `oci-registry:5000/...` esiste solo nell'ambiente
+  d'esame. `_exam_common.ensure_images()` le ricrea in locale con gli stessi
+  nomi (`podman tag`/`podman build` dalle immagini ufficiali docker.io), così
+  si digitano gli stessi comandi dell'esame. Il primo `setup()` le scarica
+  (serve accesso a docker.io), per questo gli esercizi dichiarano
+  `SETUP_TIMEOUT = 900`, letto da `training_monitor.py` al posto dei 180s di
+  default. I `cleanup()` non le rimuovono.
+- **File di partenza**: sotto `~/try-exam/<esercizio>/` (nel tema erano
+  `/home/.../...`), ricreati da ogni `setup()`.
+- **"Staccato dalla CLI"**: `podman inspect` non registra se un container è
+  stato avviato con `-d`. `podman_attached_clients()` (in
+  `_training_common.py`) cerca quindi un client `podman run` senza `-d`,
+  `start -a` o `attach` ancora vivo per quel container.
+- **Scostamenti dal tema annotato**: es. 3 chiedeva 8080:80 per entrambi i
+  container e che coesistessero (impossibile): il secondo usa 8081. Es. 4:
+  la directory è `/docker-entrypoint-initdb.d`. Es. 6: il nome del container
+  DB (`acme-wp-backend-ts`) non era annotato; i guasti delle immagini
+  `-broken` sono inventati (manca `MARIADB_ROOT_PASSWORD` nel backend,
+  `WORDPRESS_DB_HOST` punta al container dell'es. 5 nell'app), entrambi
+  correggibili con `-e` senza cambiare immagine.
 
 ## Esercizi coperti
 
