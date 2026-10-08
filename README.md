@@ -416,8 +416,8 @@ ma i file vanno in `training/exercises-do188/<capNN>-<slug>.py`, e
 memoria: 6 esercizi, ognuno con più richieste (container nginx con bind
 mount, `podman cp` + `nginx -s reload`, due container con variabili
 d'ambiente, Containerfile con `ARG`/`ENV`/`COPY` e build con
-`--build-arg`, rete + volumi + database, troubleshooting WordPress +
-MariaDB). A differenza delle altre tracce il testo non suggerisce i comandi:
+`--build-arg`, stack a tre container mysql + WordPress + frontend nginx,
+troubleshooting dello stesso stack con immagini `-broken`). A differenza delle altre tracce il testo non suggerisce i comandi:
 la soluzione si vede solo a richiesta, con il pulsante **"Mostra soluzione"**
 del monitor (campo opzionale `SOLUTION` del modulo esercizio).
 
@@ -436,11 +436,18 @@ del monitor (campo opzionale `SOLUTION` del modulo esercizio).
   `start -a` o `attach` ancora vivo per quel container.
 - **Scostamenti dal tema annotato**: es. 3 chiedeva 8080:80 per entrambi i
   container e che coesistessero (impossibile): il secondo usa 8081. Es. 4:
-  la directory è `/docker-entrypoint-initdb.d`. Es. 6: il nome del container
-  DB (`acme-wp-backend-ts`) non era annotato; i guasti delle immagini
-  `-broken` sono inventati (manca `MARIADB_ROOT_PASSWORD` nel backend,
-  `WORDPRESS_DB_HOST` punta al container dell'es. 5 nell'app), entrambi
-  correggibili con `-e` senza cambiare immagine.
+  la directory è `/docker-entrypoint-initdb.d`. Es. 5 e 6 (rivisti dopo
+  l'esame reale): lo stack è `mysql` + `wordpress` + un frontend nginx
+  (`oci-registry:5000/acme:frontend`) che fa da reverse proxy verso l'app,
+  il cui nome legge da `$ACME_APP_HOST`; il frontend pubblica 8003. Nell'es.
+  6 c'è un guasto per immagine, tutti correggibili con `-e`:
+  `ACME_APP_HOST=fixme` nel frontend (nginx esce, "host not found in
+  upstream"), `WORDPRESS_DB_HOST` verso un host inesistente nell'app
+  (`WORDPRESS_DEBUG=1` fa comparire nei log "Name or service not known"),
+  `MYSQL_PASSWORD` diversa da quella del tema nel DB. Due trappole lasciate
+  apposta: mysql applica la password solo alla prima inizializzazione del
+  volume (va ricreato), e nginx risolve l'app solo all'avvio (ricreata
+  l'app, il frontend dà 502 finché non viene riavviato).
 
 ## Esercizi coperti
 

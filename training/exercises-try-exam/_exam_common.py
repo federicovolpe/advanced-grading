@@ -34,12 +34,50 @@ SETUP_TIMEOUT = 900
 UPSTREAM_NGINX = "docker.io/library/nginx:latest"
 UPSTREAM_MARIADB = "docker.io/library/mariadb:latest"
 UPSTREAM_WORDPRESS = "docker.io/library/wordpress:latest"
+UPSTREAM_MYSQL = "docker.io/library/mysql:8.4"
 
 IMG_NGINX = "oci-registry:5000/nginx:latest"
 IMG_NGINX_ACME = "oci-registry:5000/nginx:acme"
 IMG_WP_BACKEND = "oci-registry:5000/acme:wp-backend"
 IMG_WP_BACKEND_BROKEN = "oci-registry:5000/acme:wp-backend-broken"
 IMG_WP_APP_BROKEN = "oci-registry:5000/acme:wp-app-broken"
+
+# Stack a tre livelli (es. 5 e 6): mysql + wordpress + frontend nginx.
+IMG_MYSQL = "oci-registry:5000/mysql:8.4"
+IMG_WORDPRESS = "oci-registry:5000/wordpress:latest"
+IMG_FRONTEND = "oci-registry:5000/acme:frontend"
+IMG_DB_BROKEN = "oci-registry:5000/acme:db-broken"
+IMG_APP_BROKEN = "oci-registry:5000/acme:app-broken"
+IMG_FRONTEND_BROKEN = "oci-registry:5000/acme:frontend-broken"
+
+# Immagini del tema che sono solo un nuovo nome di quelle ufficiali.
+_TAGS = {
+    IMG_NGINX: UPSTREAM_NGINX,
+    IMG_MYSQL: UPSTREAM_MYSQL,
+    IMG_WORDPRESS: UPSTREAM_WORDPRESS,
+}
+
+# Credenziali applicative dello stack es. 5/6 (date nel tema).
+STACK_DB = {"name": "wordpress", "user": "wordpress", "password": "acme-wp-pass"}
+
+# Frontend nginx: reverse proxy verso l'app, il cui hostname arriva da
+# $ACME_APP_HOST (envsubst del template all'avvio, come nginx:acme).
+# Solo le variabili d'ambiente definite vengono sostituite, quindi
+# $http_host & co. restano variabili nginx. nginx risolve l'upstream
+# all'avvio: se il nome non esiste sulla rete esce con "host not found in
+# upstream", cosi' il guasto si legge in `podman logs`.
+_FRONTEND_TEMPLATE = """\
+server {
+    listen 80;
+    listen [::]:80;
+    location / {
+        proxy_pass http://${ACME_APP_HOST}:80;
+        proxy_set_header Host $http_host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+"""
 
 # Credenziali "cotte" nelle immagini wp-*: devono combaciare tra backend e
 # app, ed e' proprio questo che rende l'es. 6 risolvibile senza indovinare.
@@ -104,6 +142,48 @@ ENV WORDPRESS_DB_HOST=acme-wp-backend \\
     WORDPRESS_DB_PASSWORD={WP_DB_ENV['MARIADB_PASSWORD']}
 """,
     },
+    IMG_FRONTEND: {
+        "Containerfile": f"""\
+FROM {UPSTREAM_NGINX}
+ENV ACME_APP_HOST=acme-app
+COPY default.conf.template /etc/nginx/templates/default.conf.template
+""",
+        "default.conf.template": _FRONTEND_TEMPLATE,
+    },
+    # Guasti es. 6, uno per immagine:
+    # - db: MYSQL_PASSWORD diversa da quella del tema -> WordPress "Access
+    #   denied" (e il volume inizializzato con la password sbagliata la
+    #   tiene: va ricreato);
+    # - app: WORDPRESS_DB_HOST verso un host che non esiste -> nei log PHP
+    #   "getaddrinfo for acme-database failed: Name or service not known";
+    # - frontend: ACME_APP_HOST=fixme -> nginx esce, "host not found in upstream".
+    IMG_DB_BROKEN: {
+        "Containerfile": f"""\
+FROM {UPSTREAM_MYSQL}
+ENV MYSQL_ROOT_PASSWORD=acme-root \\
+    MYSQL_DATABASE={STACK_DB['name']} \\
+    MYSQL_USER={STACK_DB['user']} \\
+    MYSQL_PASSWORD=changeme
+""",
+    },
+    IMG_APP_BROKEN: {
+        "Containerfile": f"""\
+FROM {UPSTREAM_WORDPRESS}
+ENV WORDPRESS_DEBUG=1 \\
+    WORDPRESS_DB_HOST=acme-database \\
+    WORDPRESS_DB_NAME={STACK_DB['name']} \\
+    WORDPRESS_DB_USER={STACK_DB['user']} \\
+    WORDPRESS_DB_PASSWORD={STACK_DB['password']}
+""",
+    },
+    IMG_FRONTEND_BROKEN: {
+        "Containerfile": f"""\
+FROM {UPSTREAM_NGINX}
+ENV ACME_APP_HOST=fixme
+COPY default.conf.template /etc/nginx/templates/default.conf.template
+""",
+        "default.conf.template": _FRONTEND_TEMPLATE,
+    },
 }
 
 
@@ -123,9 +203,9 @@ def ensure_images(*names):
     for name in names:
         if image_exists(name):
             continue
-        if name == IMG_NGINX:
-            ensure_upstream(UPSTREAM_NGINX)
-            podman("tag", UPSTREAM_NGINX, IMG_NGINX, check=True)
+        if name in _TAGS:
+            ensure_upstream(_TAGS[name])
+            podman("tag", _TAGS[name], name, check=True)
             continue
         files = _BUILDS[name]
         for line in files["Containerfile"].splitlines():
@@ -190,6 +270,21 @@ def check_volume_mount(name, volume, destination):
                    and m.get("Destination") == destination for m in mounts):
             found = [f"{m.get('Name') or m.get('Source')} -> {m.get('Destination')}" for m in mounts]
             step.add_error(f"mount trovati: {found or 'nessuno'}")
+
+
+def check_stack_http(port):
+    """Con DB raggiungibile e WordPress non ancora installato la home
+    redirige a wp-admin/install.php; senza DB risponde 500, senza frontend
+    la connessione fallisce, con nginx che non trova l'app 502."""
+    with GradingStep(f"http://localhost:{port} mostra l'installazione di WordPress") as step:
+        result = subprocess.run(
+            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code} %{redirect_url}",
+             "--max-time", "15", f"http://localhost:{port}/"],
+            capture_output=True, text=True,
+        )
+        out = result.stdout.strip()
+        if not (out.startswith("200") or "install.php" in out):
+            step.add_error(f"risposta: {out or 'nessuna'}")
 
 
 def check_networks_exist(*names):
