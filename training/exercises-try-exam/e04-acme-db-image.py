@@ -54,6 +54,30 @@ passando gli argomenti DB_ROOT_PASSWORD con valore acme e
 DB_ACME_DATABASE con valore acme.
 """
 
+SOLUTION = f"""\
+Contenuto di Containerfile.acme-db:
+
+  FROM mariadb:latest
+  ARG DB_ROOT_PASSWORD
+  ARG DB_ACME_DATABASE
+  ENV MARIADB_ROOT_PASSWORD=${{DB_ROOT_PASSWORD}} \\
+      MARIADB_DATABASE=${{DB_ACME_DATABASE}}
+  COPY acmeData.sql {INIT_DIR}/
+
+Build (dalla directory che contiene acmeData.sql):
+
+  cd {WORK_DIR}
+  podman build -t {IMAGE} -f Containerfile.acme-db \\
+      --build-arg DB_ROOT_PASSWORD=acme \\
+      --build-arg DB_ACME_DATABASE=acme .
+
+Gli ARG esistono solo durante la build: copiandoli in ENV restano
+nell'immagine e li legge l'entrypoint di mariadb all'avvio.
+
+Verifica:
+  podman image inspect {IMAGE} --format '{{{{.Config.Env}}}}'
+"""
+
 CHAPTER = "Try exam"
 TITLE = "4) Containerfile con ARG/ENV e build"
 PROJECT = None

@@ -31,6 +31,20 @@ Nota: il container deve servire sempre il file index.html aggiornato,
 senza necessita' di riavviare il container.
 """
 
+SOLUTION = f"""\
+podman run -d --name {NAME} -p {HOST_PORT}:80 \\
+    -v {HOST_FILE}:{NGINX_INDEX}:Z \\
+    {IMG_NGINX}
+
+Il bind mount (-v) fa vedere al container il file dell'host: ogni modifica
+e' subito visibile, senza riavvio. In alternativa si puo' montare l'intera
+directory: -v {os.path.dirname(HOST_FILE)}:/usr/share/nginx/html:Z
+(:Z serve per l'etichetta SELinux.)
+
+Verifica:
+  curl localhost:{HOST_PORT}
+"""
+
 CHAPTER = "Try exam"
 TITLE = "1) nginx che serve un file dell'host"
 PROJECT = None

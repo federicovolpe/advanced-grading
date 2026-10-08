@@ -27,6 +27,18 @@ TASK = f"""\
       - collegalo alla network {NETWORK}
 """
 
+SOLUTION = f"""\
+podman network create {NETWORK}
+podman volume create {DB_VOLUME}
+podman volume create {APP_VOLUME}
+podman run -d --name {NAME} --network {NETWORK} \\
+    -v {DB_VOLUME}:/var/lib/mysql \\
+    {IMG_WP_BACKEND}
+
+Verifica:
+  podman logs {NAME}      (attendi "ready for connections")
+"""
+
 CHAPTER = "Try exam"
 TITLE = "5) Rete, volumi e database"
 PROJECT = None

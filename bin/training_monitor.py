@@ -119,6 +119,9 @@ def load_exercises(exercises_dir):
             # Esercizi che al primo setup scaricano/costruiscono immagini
             # pesanti (traccia try-exam) possono chiedere piu' tempo.
             "setup_timeout": ns.get("SETUP_TIMEOUT", 180),
+            # Opzionale: soluzione mostrata solo a richiesta (pulsante),
+            # per le tracce che non mettono i comandi suggeriti nel TASK.
+            "solution": ns.get("SOLUTION", ""),
         })
     return exercises
 
@@ -214,7 +217,7 @@ class TrainingMonitor:
 
         root.title(f"Training {course_label}")
         root.attributes("-topmost", True)
-        root.geometry("620x520")
+        root.geometry("720x560")
         root.configure(bg="#1e1e1e")
 
         top = tk.Frame(root, bg="#1e1e1e")
@@ -227,7 +230,7 @@ class TrainingMonitor:
         self.title_label = tk.Label(
             root, text="", bg="#1e1e1e", fg="#f0f0f0",
             font=("sans-serif", 13, "bold"), anchor="w", justify="left",
-            wraplength=580,
+            wraplength=680,
         )
         self.title_label.pack(fill="x", padx=12, pady=(0, 6))
 
@@ -256,6 +259,8 @@ class TrainingMonitor:
 
         tk.Button(buttons, text="⟲ Ricomincia esercizio", command=self.restart_exercise).pack(side="left")
         tk.Button(buttons, text="Ricontrolla ora", command=self.grade_async).pack(side="left", padx=6)
+        self.solution_button = tk.Button(buttons, text="Mostra soluzione", command=self.toggle_solution)
+        self.solution_button.pack(side="left")
         self.next_button = tk.Button(
             buttons, text="Esercizio successivo →", command=self.next_exercise,
         )
@@ -286,15 +291,33 @@ class TrainingMonitor:
             text=f"Esercizio {self.index + 1}/{len(self.exercises)} — {ex['chapter']}"
         )
         self.title_label.config(text=ex["title"])
-        self.task_text.config(state="normal")
-        self.task_text.delete("1.0", "end")
-        self.task_text.insert("1.0", ex["task"])
-        self.task_text.config(state="disabled")
+        self.solution_visible = False
+        self.render_task()
         self.summary_label.config(text="")
         for widget in self.grid_frame.winfo_children():
             widget.destroy()
         self.set_busy(True, "Preparazione ambiente in corso…")
         threading.Thread(target=self._run_setup, daemon=True).start()
+
+    def render_task(self):
+        ex = self.current
+        text = ex["task"]
+        if self.solution_visible:
+            text += "\n" + "─" * 40 + "\nSoluzione:\n\n" + ex["solution"]
+        self.task_text.config(state="normal")
+        self.task_text.delete("1.0", "end")
+        self.task_text.insert("1.0", text)
+        self.task_text.config(state="disabled")
+        if self.solution_visible:
+            self.task_text.see("end")
+        self.solution_button.config(
+            text="Nascondi soluzione" if self.solution_visible else "Mostra soluzione",
+            state="normal" if ex["solution"] else "disabled",
+        )
+
+    def toggle_solution(self):
+        self.solution_visible = not self.solution_visible
+        self.render_task()
 
     def set_busy(self, busy, message=""):
         self.busy = busy

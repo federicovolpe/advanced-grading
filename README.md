@@ -417,7 +417,9 @@ memoria: 6 esercizi, ognuno con più richieste (container nginx con bind
 mount, `podman cp` + `nginx -s reload`, due container con variabili
 d'ambiente, Containerfile con `ARG`/`ENV`/`COPY` e build con
 `--build-arg`, rete + volumi + database, troubleshooting WordPress +
-MariaDB). A differenza delle altre tracce il testo non suggerisce i comandi.
+MariaDB). A differenza delle altre tracce il testo non suggerisce i comandi:
+la soluzione si vede solo a richiesta, con il pulsante **"Mostra soluzione"**
+del monitor (campo opzionale `SOLUTION` del modulo esercizio).
 
 - **Immagini del tema**: `oci-registry:5000/...` esiste solo nell'ambiente
   d'esame. `_exam_common.ensure_images()` le ricrea in locale con gli stessi

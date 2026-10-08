@@ -48,6 +48,36 @@ correggili (senza cambiare immagine) finche' entrambi i container sono in
 esecuzione e WordPress riesce a collegarsi al database.
 """
 
+SOLUTION = f"""\
+podman network create {NETWORK}
+podman volume create {DB_VOLUME}
+podman volume create {APP_VOLUME}
+
+podman run -d --name {DB_NAME} --network {NETWORK} \\
+    -v {DB_VOLUME}:/var/lib/mysql \\
+    -e MARIADB_ROOT_PASSWORD=acme \\
+    {IMG_WP_BACKEND_BROKEN}
+
+podman run -d --name {APP_NAME} --network {NETWORK} \\
+    -v {APP_VOLUME}:/var/www/html \\
+    -e WORDPRESS_DB_HOST={DB_NAME} \\
+    {IMG_WP_APP_BROKEN}
+
+Come si trovano i guasti:
+  1. il DB si ferma subito -> podman logs {DB_NAME}:
+     "Database is uninitialized and password option is not specified"
+     -> manca MARIADB_ROOT_PASSWORD (si passa con -e).
+  2. WordPress risponde 500 "Error establishing a database connection"
+     -> podman inspect {APP_NAME} --format '{{{{.Config.Env}}}}'
+     mostra WORDPRESS_DB_HOST=acme-wp-backend, che non esiste sulla rete
+     {NETWORK}: va sovrascritto col nome del container DB.
+  Utente/password/nome DB sono gia' coerenti tra le due immagini.
+  Prima di rilanciare un container corretto: podman rm -f <nome>.
+
+Verifica:
+  podman exec {APP_NAME} curl -sI localhost   (302 verso install.php)
+"""
+
 CHAPTER = "Try exam"
 TITLE = "6) Troubleshooting WordPress + database"
 PROJECT = None

@@ -63,6 +63,18 @@ Poi:
   - esegui il comando "nginx -s reload" dentro il container
 """
 
+SOLUTION = f"""\
+podman run -d --name {NAME} -p {HOST_PORT}:80 {IMG_NGINX}
+podman cp {HOST_HTML}/. {NAME}:{DOC_ROOT}
+podman cp {HOST_CONF} {NAME}:{CONF_PATH}
+podman exec {NAME} nginx -s reload
+
+"html/." copia il CONTENUTO della directory dentro {DOC_ROOT}.
+
+Verifica:
+  curl -I localhost:{HOST_PORT}     (deve comparire l'header {MARKER_HEADER})
+"""
+
 CHAPTER = "Try exam"
 TITLE = "2) podman cp e reload di nginx"
 PROJECT = None

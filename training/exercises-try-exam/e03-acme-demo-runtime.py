@@ -32,6 +32,20 @@ Crea 2 container con l'immagine {IMG_NGINX_ACME}:
   - i container devono essere in esecuzione contemporaneamente
 """
 
+SOLUTION = f"""\
+podman run -d --name {NAMES[0]} -e WELCOME_MESSAGE={CONTAINERS[0][1]} \\
+    -p {CONTAINERS[0][2]}:80 {IMG_NGINX_ACME}
+podman run -d --name {NAMES[1]} -e WELCOME_MESSAGE={CONTAINERS[1][1]} \\
+    -p {CONTAINERS[1][2]}:80 {IMG_NGINX_ACME}
+
+Due container non possono pubblicare la stessa porta dell'host: per farli
+coesistere ognuno usa una porta host diversa.
+
+Verifica:
+  curl localhost:{CONTAINERS[0][2]}
+  curl localhost:{CONTAINERS[1][2]}
+"""
+
 CHAPTER = "Try exam"
 TITLE = "3) Due container con variabili d'ambiente"
 PROJECT = None
