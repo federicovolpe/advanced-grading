@@ -271,6 +271,8 @@ class TrainingMonitor:
         # dopo averlo tinto di verde a esercizio completato.
         self.DEFAULT_BUTTON_BG = self.next_button.cget("bg")
         tk.Button(buttons, text="Salta →", command=self.next_exercise).pack(side="right", padx=6)
+        self.prev_button = tk.Button(buttons, text="← Precedente", command=self.prev_exercise)
+        self.prev_button.pack(side="right")
 
         root.protocol("WM_DELETE_WINDOW", self.on_close)
         self.root.after(100, self._poll_queue)
@@ -323,6 +325,7 @@ class TrainingMonitor:
         self.busy = busy
         state = "disabled" if busy else "normal"
         self.next_button.config(state=state)
+        self.prev_button.config(state="disabled" if busy or self.index == 0 else "normal")
         if message:
             self.status_label.config(text=message)
 
@@ -432,13 +435,24 @@ class TrainingMonitor:
         # teardown_exercise()): senza questo, un giro completo del curriculum
         # lascia residui mai piu' puliti da nessuno. In background: non deve
         # bloccare il passaggio al prossimo esercizio.
+        if self.index + 1 < len(self.exercises):
+            self._leave_to(self.index + 1)
+        else:
+            threading.Thread(target=teardown_exercise, args=(self.current["file"],), daemon=True).start()
+            self.status_label.config(text="🎉 Hai completato tutti gli esercizi disponibili!")
+
+    def prev_exercise(self):
+        # Come next_exercise(): l'esercizio di destinazione riparte da zero
+        # (il suo setup() ripulisce), il lavoro fatto li' prima non c'e' piu'.
+        if self.busy or self.index == 0:
+            return
+        self._leave_to(self.index - 1)
+
+    def _leave_to(self, new_index):
         leaving_file = self.current["file"]
         threading.Thread(target=teardown_exercise, args=(leaving_file,), daemon=True).start()
-        if self.index + 1 < len(self.exercises):
-            self.index += 1
-            self.enter_exercise()
-        else:
-            self.status_label.config(text="🎉 Hai completato tutti gli esercizi disponibili!")
+        self.index = new_index
+        self.enter_exercise()
 
     def on_close(self):
         self.running = False

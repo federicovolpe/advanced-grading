@@ -182,6 +182,9 @@ Apre una finestra grafica che mostra **un esercizio alla volta**:
    `progress-exercises-do188.json` per DO188) e viene ripreso
    automaticamente la volta successiva che si lancia `start-training`/
    `start-training-do188`.
+5. Un pulsante **"← Precedente"** torna all'esercizio prima (disattivato
+   sul primo). Come per l'avanzamento, l'esercizio che si lascia viene
+   ripulito e quello di destinazione riparte da zero.
 
 **Pulizia automatica**: l'ambiente dell'esercizio che si lascia viene
 ripulito sia passando al successivo sia chiudendo la finestra, invocando
