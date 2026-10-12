@@ -45,7 +45,7 @@ Verifica:
   curl localhost:{HOST_PORT}
 """
 
-CHAPTER = "Try exam"
+CHAPTER = "Try exam EX188"
 TITLE = "1) nginx che serve un file dell'host"
 PROJECT = None
 

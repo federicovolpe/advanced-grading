@@ -53,8 +53,7 @@ bash /tmp/do180-lab-grading/install.sh
 | `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training`/`start-training-do188` |
 | `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero DO180 |
 | `training/exercises-do188/*.py` | `~/.local/share/training/exercises-do188/` | Esercizi del training libero DO188 (stato Podman locale) |
-| `training/exercises-try-exam/*.py` | `~/.local/share/training/exercises-try-exam/` | Simulazione d'esame DO188 (`start-try-exam`) |
-| `training/exercises-try-exam-ex280/*.py` | `~/.local/share/training/exercises-try-exam-ex280/` | Simulazione d'esame EX280 (`start-try-exam-ex280`) |
+| `training/exercises-try-exam-<esame>/*.py` | `~/.local/share/training/exercises-try-exam-<esame>/` | Simulazioni d'esame, una directory per esame (`start-try-exam ex188`, `start-try-exam ex280`) |
 
 ## Come funziona il wrapper
 
@@ -147,25 +146,33 @@ separatamente), a seconda di dove vive lo stato da gradare:
   crea/rimuove container, immagini, volumi e reti sulla workstation, senza
   bisogno di alcun cluster (coerente col fatto che il manuale DO188, a parte
   il capitolo 8, non tocca mai OpenShift — vedi [sotto](#do188-training-red-hat-openshift-development-i)).
-- **try-exam** (`start-try-exam`) — simulazione d'esame DO188, stato Podman
-  locale: 6 esercizi più lunghi, senza comandi suggeriti — vedi
-  [sotto](#try-exam-simulazione-desame-do188).
-- **try-exam-ex280** (`start-try-exam-ex280`) — simulazione d'esame EX280,
-  stato sul cluster OpenShift (anche cluster-wide, serve il login come
-  admin): 9 esercizi senza comandi suggeriti — vedi
-  [sotto](#try-exam-ex280-simulazione-desame-ex280).
+- **try-exam `<esame>`** (`start-try-exam <esame>`) — simulazioni d'esame,
+  esercizi più lunghi e senza comandi suggeriti. L'esame va sempre
+  indicato; oggi ce ne sono due:
+  - `ex188` — DO188, stato Podman locale, 6 esercizi — vedi
+    [sotto](#try-exam-ex188-simulazione-desame-do188);
+  - `ex280` — stato sul cluster OpenShift (anche cluster-wide, serve il
+    login come admin), 9 esercizi — vedi
+    [sotto](#try-exam-ex280-simulazione-desame-ex280).
 
-Il meccanismo grafico (`training_monitor.py`) e' lo stesso per entrambe: solo
+Il meccanismo grafico (`training_monitor.py`) e' lo stesso per tutte: solo
 la directory degli esercizi cambia, passata con `training {start|list|goto|
-cleanup|reset} [do180|do188|try-exam]` (default `do180` se omesso).
+cleanup|reset} [do180|do188|try-exam <esame>]` (default `do180` se omesso).
+
+**Aggiungere un esame**: basta creare `training/exercises-try-exam-<esame>/`
+(es. `exercises-try-exam-ex380/`) e rilanciare `bash install.sh`: installer,
+`start-try-exam` e `training` scoprono gli esami dalle directory, senza
+modifiche. Il nome si puo' scrivere anche solo col numero (`380`, `do380`,
+`EX380` diventano tutti `ex380`); senza esame, o con uno sconosciuto, i
+comandi elencano quelli disponibili.
 
 ### Cosa fa
 
 ```bash
 start-training          # traccia DO180 — equivalente a 'training start do180'
 start-training-do188    # traccia DO188 — equivalente a 'training start do188'
-start-try-exam          # simulazione d'esame DO188 — equivalente a 'training start try-exam'
-start-try-exam-ex280    # simulazione d'esame EX280 — equivalente a 'training start try-exam-ex280'
+start-try-exam ex188    # simulazione d'esame DO188 — equivalente a 'training start try-exam ex188'
+start-try-exam ex280    # simulazione d'esame EX280 — equivalente a 'training start try-exam ex280'
 ```
 
 Apre una finestra grafica che mostra **un esercizio alla volta**:
@@ -419,9 +426,11 @@ ma i file vanno in `training/exercises-do188/<capNN>-<slug>.py`, e
 `setup()`/`cleanup()` usano `podman_reset()`/`podman()` invece di
 `reset_project()`/`oc()` da `_training_common.py`.
 
-### Try-exam: simulazione d'esame DO188
+### Try-exam ex188: simulazione d'esame DO188
 
-`training/exercises-try-exam/` riproduce un tema d'esame DO188 annotato a
+`training/exercises-try-exam-ex188/` (`start-try-exam ex188`; fino a poco
+fa si chiamava `exercises-try-exam` e partiva con `start-try-exam` senza
+argomenti: `install.sh` sposta i progressi salvati sul nuovo nome) riproduce un tema d'esame DO188 annotato a
 memoria: 6 esercizi, ognuno con più richieste (container nginx con bind
 mount, `podman cp` + `nginx -s reload`, due container con variabili
 d'ambiente, Containerfile con `ARG`/`ENV`/`COPY` e build con
@@ -460,9 +469,9 @@ del monitor (campo opzionale `SOLUTION` del modulo esercizio).
 
 ### Try-exam EX280: simulazione d'esame EX280
 
-`training/exercises-try-exam-ex280/` riproduce un tema d'esame EX280 (Red
-Hat Certified OpenShift Administrator) annotato dall'utente: 9 esercizi,
-stesso formato della traccia try-exam DO188 (niente comandi nel testo,
+`training/exercises-try-exam-ex280/` (`start-try-exam ex280`) riproduce un
+tema d'esame EX280 (Red Hat Certified OpenShift Administrator) annotato
+dall'utente: 9 esercizi, stesso formato della simulazione ex188 (niente comandi nel testo,
 pulsante **"Mostra soluzione"**).
 
 1. utenti `dba`/`tester` aggiunti al secret HTPasswd `localusers`;
@@ -486,7 +495,7 @@ Prima di avviarla: `oc login -u admin -p redhatocp https://api.lab.example.com:6
   allo stato del classroom — in particolare l'es. 5 ripristina
   `self-provisioners` (senza, `developer` non potrebbe piu' creare progetti
   e la traccia DO180 si romperebbe). Dopo una chiusura brusca della
-  finestra: `training cleanup try-exam-ex280`.
+  finestra: `training cleanup try-exam ex280`.
 - **Cleanup e setup in parallelo**: il monitor lancia il cleanup
   dell'esercizio che si lascia in parallelo al setup del successivo, e piu'
   esercizi condividono lo stesso progetto (`practice3`, `console-review`,

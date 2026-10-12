@@ -1,5 +1,5 @@
 """
-Utilita' condivise dalla traccia "try-exam-ex280" (simulazione d'esame
+Utilita' condivise dalla traccia "try-exam ex280" (simulazione d'esame
 EX280, Red Hat Certified OpenShift Administrator). Il file inizia con '_'
 cosi' training_monitor.py non lo carica come esercizio.
 

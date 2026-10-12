@@ -1,5 +1,5 @@
 """
-Utilita' condivise dalla traccia "try-exam" (simulazione d'esame DO188,
+Utilita' condivise dalla traccia "try-exam ex188" (simulazione d'esame EX188 / DO188,
 stato Podman locale). Il file inizia con '_' cosi' training_monitor.py non
 lo carica come esercizio.
 

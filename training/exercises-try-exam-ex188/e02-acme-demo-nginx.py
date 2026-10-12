@@ -75,7 +75,7 @@ Verifica:
   curl -I localhost:{HOST_PORT}     (deve comparire l'header {MARKER_HEADER})
 """
 
-CHAPTER = "Try exam"
+CHAPTER = "Try exam EX188"
 TITLE = "2) podman cp e reload di nginx"
 PROJECT = None
 

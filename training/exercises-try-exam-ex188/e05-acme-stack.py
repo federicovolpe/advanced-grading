@@ -134,7 +134,7 @@ Verifica:
   curl -sI localhost:{PORT}     (302 verso wp-admin/install.php)
 """
 
-CHAPTER = "Try exam"
+CHAPTER = "Try exam EX188"
 TITLE = "5) Stack mysql + WordPress + frontend nginx"
 PROJECT = None
 

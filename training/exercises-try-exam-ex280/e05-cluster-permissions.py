@@ -15,7 +15,7 @@ ATTENZIONE: e' l'unico esercizio che cambia un default che le ALTRE tracce
 usano (developer crea i propri progetti in DO180). cleanup() ripristina la
 ClusterRoleBinding self-provisioners com'e' su un cluster appena installato
 e toglie i ruoli dati agli utenti dell'esercizio. Se la finestra viene
-chiusa male, `training cleanup try-exam-ex280` fa la stessa cosa.
+chiusa male, `training cleanup try-exam ex280` fa la stessa cosa.
 """
 import json
 import sys, os
