@@ -155,11 +155,8 @@ def main():
             # Interroghiamo localhost:3000 solo se e' proprio QUESTO container
             # a pubblicarla: un altro dei tre rimasto acceso risponderebbe
             # allo stesso URL.
-            # 127.0.0.1 e non 'localhost': sulla workstation 'localhost' si
-            # risolve prima in ::1, dove il port forwarding rootless resetta
-            # la connessione (curl non ripiega su IPv4, verificato dal vivo).
             published = running and _published_on_3000(name)
-            ok, body = http_get(f"http://127.0.0.1:{PORT}/greet") if published else (False, "")
+            ok, body = http_get(f"http://localhost:{PORT}/greet") if published else (False, "")
             answered = ok and '"hello"' in body and '"world"' in body
             if not ever_true(LAB_NAME, f"{name}-greet", answered):
                 if not running:
@@ -170,7 +167,7 @@ def main():
                 elif not published:
                     step.fail(f"'{name}' non pubblica la porta {PORT} dell'host")
                 elif not ok:
-                    step.fail(f"GET http://127.0.0.1:{PORT}/greet non ha risposto (HTTP)")
+                    step.fail(f"GET http://localhost:{PORT}/greet non ha risposto (HTTP)")
                 else:
                     step.add_error(f"Risposta inattesa da /greet: {body!r}")
 

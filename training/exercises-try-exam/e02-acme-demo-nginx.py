@@ -122,7 +122,7 @@ def grade():
 
     with GradingStep("nginx sta usando la nuova configurazione (reload eseguito)") as step:
         result = subprocess.run(
-            ["curl", "-sS", "-D", "-", "-o", "/dev/null", "--max-time", "5",
+            ["curl", "-4", "-sS", "-D", "-", "-o", "/dev/null", "--max-time", "5",
              f"http://localhost:{HOST_PORT}/"],
             capture_output=True, text=True,
         )

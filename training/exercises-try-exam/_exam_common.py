@@ -278,7 +278,7 @@ def check_stack_http(port):
     la connessione fallisce, con nginx che non trova l'app 502."""
     with GradingStep(f"http://localhost:{port} mostra l'installazione di WordPress") as step:
         result = subprocess.run(
-            ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code} %{redirect_url}",
+            ["curl", "-4", "-s", "-o", "/dev/null", "-w", "%{http_code} %{redirect_url}",
              "--max-time", "15", f"http://localhost:{port}/"],
             capture_output=True, text=True,
         )

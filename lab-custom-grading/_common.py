@@ -8,6 +8,7 @@ da dettagli indentati di 8 spazi) e' compatibile con il parser di
 import json
 import os
 import subprocess
+import urllib.parse
 
 
 class GradingStep:
@@ -430,12 +431,25 @@ def podman_ever_started(image=None, name=None, since=None, sudo=False):
     return False
 
 
+def _curl_ip_flags(url):
+    """["-4"] se la URL punta a localhost, altrimenti [].
+
+    Sulla workstation "localhost" risolve prima a ::1 e il port forwarding
+    rootless di Podman (pasta) lo inoltra a ::1 DENTRO il container: se l'app
+    ascolta solo su IPv4 (0.0.0.0, es. Node/Fastify) la connessione viene
+    resettata e curl non ripiega su 127.0.0.1 (visto dal vivo con
+    custom-containerfiles). Le porte pubblicate ascoltano sempre anche in
+    IPv4, quindi forzarlo e' corretto qualunque sia l'app; l'header Host
+    resta "localhost" (conta per WordPress/nginx)."""
+    return ["-4"] if urllib.parse.urlsplit(url).hostname == "localhost" else []
+
+
 def http_get(url, timeout=5):
     """Esegue una GET con curl (nessuna dipendenza extra tipo `requests`).
     Ritorna (ok, body): ok è True solo se la richiesta HTTP ha avuto successo
     (curl -f, quindi anche un 4xx/5xx del server conta come non-ok)."""
     result = subprocess.run(
-        ["curl", "-fsS", "--max-time", str(timeout), url],
+        ["curl", "-fsS", *_curl_ip_flags(url), "--max-time", str(timeout), url],
         capture_output=True, text=True,
     )
     return result.returncode == 0, result.stdout
@@ -447,7 +461,7 @@ def http_get_follow(url, timeout=5):
     verso un altro container/porta e la specifica di grading ufficiale usa
     `requests.get()`, che segue i redirect di default."""
     result = subprocess.run(
-        ["curl", "-fsSL", "--max-time", str(timeout), url],
+        ["curl", "-fsSL", *_curl_ip_flags(url), "--max-time", str(timeout), url],
         capture_output=True, text=True,
     )
     return result.returncode == 0, result.stdout
@@ -458,7 +472,7 @@ def http_get_insecure(url, timeout=5):
     per gli esercizi (es. custom-lab) che generano un certificato
     self-signed e vanno testati su https:// senza una CA valida."""
     result = subprocess.run(
-        ["curl", "-fsSk", "--max-time", str(timeout), url],
+        ["curl", "-fsSk", *_curl_ip_flags(url), "--max-time", str(timeout), url],
         capture_output=True, text=True,
     )
     return result.returncode == 0, result.stdout

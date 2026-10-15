@@ -33,7 +33,7 @@ def main():
             step.fail(f"Immagine non trovata su {REGISTRY}/{IMAGE}: {result.stdout.strip()}")
 
     with GradingStep("Il container di test locale (porta 8080) serve il contenuto atteso") as step:
-        result = run("curl -s localhost:8080")
+        result = run("curl -4 -s localhost:8080")
         if result.stdout.strip() != _EXPECTED_CONTENT:
             step.add_error(
                 f"Atteso '{_EXPECTED_CONTENT}' su localhost:8080, trovato: '{result.stdout.strip()}'"
