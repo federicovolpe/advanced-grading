@@ -8,7 +8,8 @@ Uso:
 Lancia periodicamente `lab grade <nome-lab>` (in locale o via ssh se --host
 e' specificato) e mostra i check come semafori in una finestrella sempre in
 primo piano. Passa il mouse su un semaforo per vedere titolo e dettagli del
-check.
+check. Il pulsante "Termina ora" lancia `lab finish <nome-lab>` (dopo una
+conferma) e, se va a buon fine, chiude la finestra.
 
 Fonte dei check, in ordine di preferenza:
 1. ~/.grading/grade_results.jsonl — log strutturato scritto dal pacchetto
@@ -39,6 +40,7 @@ import subprocess
 import threading
 import time
 import tkinter as tk
+from tkinter import messagebox
 from datetime import datetime, timedelta, timezone
 
 JSON_MARKER = "__LAB_GRADE_MONITOR_JSON_TAIL__"
@@ -207,6 +209,10 @@ class LabGradeMonitor:
         # sotto nohup) e la finestra restava bloccata su uno stato vecchio
         # anche premendo "Aggiorna ora".
         self.result_queue = queue.Queue()
+        # Stesso schema per l'esito di 'lab finish' (returncode, output).
+        self.finish_queue = queue.Queue()
+        self.finishing = False
+        self.next_job = None
 
         root.title(f"lab grade — {lab_name}")
         root.attributes("-topmost", True)
@@ -222,8 +228,11 @@ class LabGradeMonitor:
         )
         self.summary_label.pack(side="left")
 
-        refresh_btn = tk.Button(header, text="Aggiorna ora", command=self.run_grade_async)
-        refresh_btn.pack(side="right")
+        self.finish_btn = tk.Button(header, text="Termina ora", command=self.confirm_finish)
+        self.finish_btn.pack(side="right", padx=(6, 0))
+
+        self.refresh_btn = tk.Button(header, text="Aggiorna ora", command=self.run_grade_async)
+        self.refresh_btn.pack(side="right")
 
         self.grid_frame = tk.Frame(root, bg="#1e1e1e")
         self.grid_frame.pack(fill="both", expand=True, padx=10, pady=6)
@@ -244,7 +253,7 @@ class LabGradeMonitor:
         self.root.after(100, self._poll_queue)
 
     def schedule_next(self):
-        self.root.after(self.interval * 1000, self.run_grade_async)
+        self.next_job = self.root.after(self.interval * 1000, self.run_grade_async)
 
     def _poll_queue(self):
         # Unico punto in cui i risultati calcolati in background raggiungono
@@ -256,11 +265,74 @@ class LabGradeMonitor:
                 self._on_grade_done(checks, error, output)
         except queue.Empty:
             pass
+        try:
+            while True:
+                returncode, output = self.finish_queue.get_nowait()
+                self._on_finish_done(returncode, output)
+        except queue.Empty:
+            pass
         if self.running:
             self.root.after(100, self._poll_queue)
 
     def run_grade_async(self):
+        # Durante (e dopo) 'lab finish' niente piu' grading: la catena
+        # periodica si ferma qui, e riparte da _on_finish_done solo se il
+        # finish fallisce.
+        if self.finishing:
+            return
         threading.Thread(target=self._run_grade, daemon=True).start()
+
+    def confirm_finish(self):
+        if self.finishing:
+            return
+        # Conferma esplicita: 'lab finish' cancella container/immagini/
+        # progetti dell'esercizio, un click accidentale non deve bastare.
+        if not messagebox.askyesno(
+            "Termina laboratorio",
+            f"Eseguire 'lab finish {self.lab_name}'?\n\n"
+            "Rimuove le risorse create dall'esercizio "
+            "(container, immagini, progetti...).",
+            parent=self.root,
+        ):
+            return
+        self.finishing = True
+        # Annulla il prossimo grading gia' programmato: se scattasse dopo un
+        # finish fallito, insieme a quello rilanciato da _on_finish_done
+        # avremmo due catene di polling in parallelo.
+        if self.next_job:
+            self.root.after_cancel(self.next_job)
+            self.next_job = None
+        self.refresh_btn.config(state="disabled")
+        self.finish_btn.config(state="disabled")
+        self.status_label.config(text=f"lab finish {self.lab_name} in corso…")
+        threading.Thread(target=self._run_finish, daemon=True).start()
+
+    def _run_finish(self):
+        # Il binario 'lab' direttamente (il wrapper bash intercetta solo
+        # grade/start). stdin=DEVNULL per lo stesso motivo di _run_grade.
+        shell_cmd = f"lab finish {shlex.quote(self.lab_name)}"
+        cmd = ["ssh", self.host, shell_cmd] if self.host else ["bash", "-c", shell_cmd]
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=900,
+                stdin=subprocess.DEVNULL,
+            )
+            self.finish_queue.put((result.returncode, strip_ansi(result.stdout + result.stderr)))
+        except Exception as exc:
+            self.finish_queue.put((None, str(exc)))
+
+    def _on_finish_done(self, returncode, output):
+        if returncode == 0:
+            self.status_label.config(text=f"Laboratorio {self.lab_name} terminato.")
+            self.root.after(2000, self.on_close)
+            return
+        self.finishing = False
+        self.refresh_btn.config(state="normal")
+        self.finish_btn.config(state="normal")
+        self.status_label.config(text=f"lab finish fallito (exit {returncode})")
+        tail = "\n".join(output.strip().splitlines()[-15:])
+        messagebox.showerror("lab finish fallito", tail or "(nessun output)", parent=self.root)
+        self.schedule_next()
 
     def _run_grade(self):
         # Passiamo dalla shell (sourciando il file che definisce il wrapper
@@ -331,7 +403,7 @@ class LabGradeMonitor:
             self.status_label.config(
                 text=f"Ultimo controllo: {timestamp} — prossimo tra {self.interval}s"
             )
-        if self.running:
+        if self.running and not self.finishing:
             self.schedule_next()
 
     def render(self):
