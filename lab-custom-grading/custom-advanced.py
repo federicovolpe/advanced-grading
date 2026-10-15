@@ -38,6 +38,17 @@ sul container "custom-advanced" (WorkingDir e USER erano gia' nello starter,
 quindi non discriminano il lavoro fatto, ma li controllo comunque perche'
 sono valori concreti e verificabili con certezza dal Containerfile).
 
+CONTAINER CHE TERMINA SUBITO: main.py aggiunge un numero a numbers.txt e
+termina (exit 0, ~60ms dall'avvio, verificato dal vivo), quindi il
+container non e' MAI in esecuzione quando passa un poll. La versione
+precedente richiedeva 'container_is_running' per tutti i check e dava 0/5
+anche a esercizio svolto bene. Ora verifico l'esecuzione dal registro
+eventi di Podman (start + died con ContainerExitCode 0, per questo
+tentativo) e leggo env/WORKDIR/USER/VOLUME/CMD dal container anche se
+terminato, oppure, se e' stato lanciato con --rm e non esiste piu',
+dall'immagine dell'ultimo avvio (VOLUME → Config.Volumes, che e' cio' che
+genera il mount anonimo).
+
 Uso: custom-advanced.py   (nessun progetto OpenShift: e' un esercizio Podman)
 """
 
@@ -47,10 +58,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from _common import (
     GradingStep,
-    container_env,
-    container_is_running,
-    container_mounts,
+    attempt_started_at,
     podman_container,
+    podman_events,
+    podman_image,
 )
 
 LAB_NAME = "custom-advanced"
@@ -61,58 +72,100 @@ EXPECTED_USER = "default"
 EXPECTED_VOLUME_DEST = "/redhat/materials"
 
 
+def _container_events(events, status):
+    return [
+        ev for ev in events
+        if ev.get("Type") == "container" and ev.get("Name") == CONTAINER and ev.get("Status") == status
+    ]
+
+
+def _env_dict(config):
+    result = {}
+    for item in config.get("Env") or []:
+        if "=" in item:
+            k, v = item.split("=", 1)
+            result[k] = v
+    return result
+
+
+def _source(events):
+    """Ritorna (config, volumi, descrizione) dal container (anche terminato)
+    o, se rimosso, dall'immagine dell'ultimo avvio; (None, None, None) se
+    nessuno dei due e' disponibile."""
+    c = podman_container(CONTAINER)
+    if c:
+        volumes = [m.get("Destination") for m in c.get("Mounts") or []]
+        return c.get("Config") or {}, volumes, f"container '{CONTAINER}'"
+    starts = _container_events(events, "start")
+    image_ref = starts[-1].get("Image") if starts else None
+    img = podman_image(image_ref) if image_ref else None
+    if not img:
+        return None, None, None
+    config = img.get("Config") or {}
+    return config, list((config.get("Volumes") or {}).keys()), f"immagine '{image_ref}'"
+
+
 def main():
     print(f"🔧 Grading personalizzato per '{LAB_NAME}'")
 
-    with GradingStep(f"Il container '{CONTAINER}' e' in esecuzione") as step:
-        if not container_is_running(CONTAINER):
-            step.fail(f"Container '{CONTAINER}' non trovato o non in esecuzione")
+    events = podman_events(since=attempt_started_at(LAB_NAME))
+    config, volumes, source = _source(events)
+
+    with GradingStep(f"Il container '{CONTAINER}' e' stato eseguito ed e' terminato senza errori") as step:
+        c = podman_container(CONTAINER)
+        state = (c or {}).get("State") or {}
+        died = _container_events(events, "died")
+        if state.get("Running"):
+            pass
+        elif c and state.get("StartedAt", "").startswith("0001-"):
+            step.fail(f"Container '{CONTAINER}' creato ma mai avviato")
+        elif c:
+            if state.get("ExitCode") != 0:
+                step.add_error(
+                    f"Il container e' terminato con exit code {state.get('ExitCode')} "
+                    f"(main.py fallisce senza la env var FILE: vedi 'podman logs {CONTAINER}')"
+                )
+        elif not _container_events(events, "start"):
+            step.fail(f"Nessun avvio di un container '{CONTAINER}' registrato per questo tentativo")
+        elif died and died[-1].get("ContainerExitCode") != 0:
+            step.add_error(f"L'ultima esecuzione e' terminata con exit code {died[-1].get('ContainerExitCode')}")
+
+    def _need_source(step):
+        if config is None:
+            step.fail(f"Nessun container o immagine '{CONTAINER}' da ispezionare per questo tentativo")
+            return False
+        return True
 
     with GradingStep("La variabile d'ambiente FILE e' impostata correttamente") as step:
-        if not container_is_running(CONTAINER):
-            step.fail(f"Container '{CONTAINER}' non in esecuzione")
-        else:
-            env = container_env(CONTAINER)
+        if _need_source(step):
+            env = _env_dict(config)
             if env.get("FILE") != EXPECTED_FILE_ENV:
                 step.add_error(
-                    f"FILE={env.get('FILE')!r}, attesa {EXPECTED_FILE_ENV!r} "
+                    f"FILE={env.get('FILE')!r} ({source}), attesa {EXPECTED_FILE_ENV!r} "
                     "(senza questa env var main.py termina con RuntimeError)"
                 )
 
     with GradingStep("WORKDIR e USER del container sono quelli attesi") as step:
-        if not container_is_running(CONTAINER):
-            step.fail(f"Container '{CONTAINER}' non in esecuzione")
-        else:
-            c = podman_container(CONTAINER)
-            config = c.get("Config", {}) if c else {}
+        if _need_source(step):
             workdir = config.get("WorkingDir")
             user = config.get("User")
             if workdir != EXPECTED_WORKDIR:
-                step.add_error(f"WorkingDir={workdir!r}, atteso {EXPECTED_WORKDIR!r}")
+                step.add_error(f"WorkingDir={workdir!r} ({source}), atteso {EXPECTED_WORKDIR!r}")
             if user != EXPECTED_USER:
-                step.add_error(f"User={user!r}, atteso {EXPECTED_USER!r}")
+                step.add_error(f"User={user!r} ({source}), atteso {EXPECTED_USER!r}")
 
     with GradingStep("Il volume /redhat/materials (da VOLUME nel Containerfile) e' montato") as step:
-        if not container_is_running(CONTAINER):
-            step.fail(f"Container '{CONTAINER}' non in esecuzione")
-        else:
-            mounts = container_mounts(CONTAINER)
-            destinations = [m.get("Destination") for m in mounts]
-            if EXPECTED_VOLUME_DEST not in destinations:
-                step.add_error(
-                    f"Nessun mount con destinazione {EXPECTED_VOLUME_DEST!r} "
-                    f"(mount trovati: {destinations})"
-                )
+        if _need_source(step) and EXPECTED_VOLUME_DEST not in volumes:
+            step.add_error(
+                f"Nessun volume con destinazione {EXPECTED_VOLUME_DEST!r} "
+                f"({source}, volumi trovati: {volumes})"
+            )
 
     with GradingStep("Il comando eseguito dal container include main.py") as step:
-        if not container_is_running(CONTAINER):
-            step.fail(f"Container '{CONTAINER}' non in esecuzione")
-        else:
-            c = podman_container(CONTAINER)
-            cmd = (c.get("Config", {}) or {}).get("Cmd") or []
-            joined = " ".join(cmd)
-            if "main.py" not in joined:
-                step.add_error(f"Cmd={cmd!r} non contiene 'main.py'")
+        if _need_source(step):
+            cmd = config.get("Cmd") or []
+            if "main.py" not in " ".join(cmd):
+                step.add_error(f"Cmd={cmd!r} ({source}) non contiene 'main.py'")
 
 
 if __name__ == "__main__":
