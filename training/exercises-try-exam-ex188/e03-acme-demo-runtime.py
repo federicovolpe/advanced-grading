@@ -46,7 +46,7 @@ Verifica:
   curl localhost:{CONTAINERS[1][2]}
 """
 
-CHAPTER = "Try exam"
+CHAPTER = "Try exam EX188"
 TITLE = "3) Due container con variabili d'ambiente"
 PROJECT = None
 

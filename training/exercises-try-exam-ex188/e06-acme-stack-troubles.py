@@ -113,7 +113,7 @@ Verifica:
   curl -sI localhost:{PORT}     (302 verso wp-admin/install.php)
 """
 
-CHAPTER = "Try exam"
+CHAPTER = "Try exam EX188"
 TITLE = "6) Troubleshooting stack con immagini -broken"
 PROJECT = None
 

@@ -78,7 +78,7 @@ Verifica:
   podman image inspect {IMAGE} --format '{{{{.Config.Env}}}}'
 """
 
-CHAPTER = "Try exam"
+CHAPTER = "Try exam EX188"
 TITLE = "4) Containerfile con ARG/ENV e build"
 PROJECT = None
 

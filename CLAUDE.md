@@ -290,3 +290,15 @@ rete), il comando di avvio reale di `ubi9/httpd-24` e' `run-httpd` (non
 `httpd-foreground`), e `podman rm -f` senza `-v` lascia orfani i volumi
 anonimi creati da alcune immagini (es. `mysql`) oltre a quelli nominati
 esplicitamente.
+
+## 8. Simulazioni d'esame (training/exercises-try-exam-<esame>/)
+
+Un tema d'esame (es. annotato dall'utente dopo l'esame) va in una directory
+`training/exercises-try-exam-<esame>/`, con `<esame>` = codice d'esame in
+minuscolo (`ex188`, `ex280`, ...). Non serve toccare `install.sh` ne'
+`bashrc.d/training.sh`: entrambi scoprono gli esami dalle directory, e lo
+studente lo avvia con `start-try-exam <esame>` (l'esame e' obbligatorio).
+Stesso formato delle tracce di training, ma niente comandi nel `TASK`: la
+soluzione va nel campo opzionale `SOLUTION` (pulsante "Mostra soluzione").
+Le utilita' condivise dell'esame stanno in un modulo `_<nome>.py` nella
+stessa directory (vedi `_exam_common.py`, `_ex280_common.py`).

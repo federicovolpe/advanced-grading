@@ -53,7 +53,7 @@ bash /tmp/do180-lab-grading/install.sh
 | `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training`/`start-training-do188` |
 | `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero DO180 |
 | `training/exercises-do188/*.py` | `~/.local/share/training/exercises-do188/` | Esercizi del training libero DO188 (stato Podman locale) |
-| `training/exercises-try-exam/*.py` | `~/.local/share/training/exercises-try-exam/` | Simulazione d'esame DO188 (`start-try-exam`) |
+| `training/exercises-try-exam-<esame>/*.py` | `~/.local/share/training/exercises-try-exam-<esame>/` | Simulazioni d'esame, una directory per esame (`start-try-exam ex188`, `start-try-exam ex280`) |
 
 ## Come funziona il wrapper
 
@@ -146,20 +146,33 @@ separatamente), a seconda di dove vive lo stato da gradare:
   crea/rimuove container, immagini, volumi e reti sulla workstation, senza
   bisogno di alcun cluster (coerente col fatto che il manuale DO188, a parte
   il capitolo 8, non tocca mai OpenShift — vedi [sotto](#do188-training-red-hat-openshift-development-i)).
-- **try-exam** (`start-try-exam`) — simulazione d'esame DO188, stato Podman
-  locale: 6 esercizi più lunghi, senza comandi suggeriti — vedi
-  [sotto](#try-exam-simulazione-desame-do188).
+- **try-exam `<esame>`** (`start-try-exam <esame>`) — simulazioni d'esame,
+  esercizi più lunghi e senza comandi suggeriti. L'esame va sempre
+  indicato; oggi ce ne sono due:
+  - `ex188` — DO188, stato Podman locale, 6 esercizi — vedi
+    [sotto](#try-exam-ex188-simulazione-desame-do188);
+  - `ex280` — stato sul cluster OpenShift (anche cluster-wide, serve il
+    login come admin), 9 esercizi — vedi
+    [sotto](#try-exam-ex280-simulazione-desame-ex280).
 
-Il meccanismo grafico (`training_monitor.py`) e' lo stesso per entrambe: solo
+Il meccanismo grafico (`training_monitor.py`) e' lo stesso per tutte: solo
 la directory degli esercizi cambia, passata con `training {start|list|goto|
-cleanup|reset} [do180|do188|try-exam]` (default `do180` se omesso).
+cleanup|reset} [do180|do188|try-exam <esame>]` (default `do180` se omesso).
+
+**Aggiungere un esame**: basta creare `training/exercises-try-exam-<esame>/`
+(es. `exercises-try-exam-ex380/`) e rilanciare `bash install.sh`: installer,
+`start-try-exam` e `training` scoprono gli esami dalle directory, senza
+modifiche. Il nome si puo' scrivere anche solo col numero (`380`, `do380`,
+`EX380` diventano tutti `ex380`); senza esame, o con uno sconosciuto, i
+comandi elencano quelli disponibili.
 
 ### Cosa fa
 
 ```bash
 start-training          # traccia DO180 — equivalente a 'training start do180'
 start-training-do188    # traccia DO188 — equivalente a 'training start do188'
-start-try-exam          # simulazione d'esame — equivalente a 'training start try-exam'
+start-try-exam ex188    # simulazione d'esame DO188 — equivalente a 'training start try-exam ex188'
+start-try-exam ex280    # simulazione d'esame EX280 — equivalente a 'training start try-exam ex280'
 ```
 
 Apre una finestra grafica che mostra **un esercizio alla volta**:
@@ -413,9 +426,11 @@ ma i file vanno in `training/exercises-do188/<capNN>-<slug>.py`, e
 `setup()`/`cleanup()` usano `podman_reset()`/`podman()` invece di
 `reset_project()`/`oc()` da `_training_common.py`.
 
-### Try-exam: simulazione d'esame DO188
+### Try-exam ex188: simulazione d'esame DO188
 
-`training/exercises-try-exam/` riproduce un tema d'esame DO188 annotato a
+`training/exercises-try-exam-ex188/` (`start-try-exam ex188`; fino a poco
+fa si chiamava `exercises-try-exam` e partiva con `start-try-exam` senza
+argomenti: `install.sh` sposta i progressi salvati sul nuovo nome) riproduce un tema d'esame DO188 annotato a
 memoria: 6 esercizi, ognuno con più richieste (container nginx con bind
 mount, `podman cp` + `nginx -s reload`, due container con variabili
 d'ambiente, Containerfile con `ARG`/`ENV`/`COPY` e build con
@@ -451,6 +466,57 @@ del monitor (campo opzionale `SOLUTION` del modulo esercizio).
   apposta: mysql applica la password solo alla prima inizializzazione del
   volume (va ricreato), e nginx risolve l'app solo all'avvio (ricreata
   l'app, il frontend dà 502 finché non viene riavviato).
+
+### Try-exam EX280: simulazione d'esame EX280
+
+`training/exercises-try-exam-ex280/` (`start-try-exam ex280`) riproduce un
+tema d'esame EX280 (Red Hat Certified OpenShift Administrator) annotato
+dall'utente: 9 esercizi, stesso formato della simulazione ex188 (niente comandi nel testo,
+pulsante **"Mostra soluzione"**).
+
+1. utenti `dba`/`tester` aggiunti al secret HTPasswd `localusers`;
+2. gruppo `app-team`, progetto `console-review` con RoleBinding view/edit
+   e quota a 2 pod;
+3. MySQL + `famous-quotes` in `console-review`, con troubleshooting;
+4. un secondo identity provider HTPasswd (`ex280-users`);
+5. permessi cluster: niente self-provisioner per tutti, `wozniak`
+   cluster-admin, `jobs` self-provisioner, `pippo` senza permessi di modifica;
+6. ResourceQuota `my-quota` e LimitRange `my-limits` in `practice3`;
+7. route edge con certificato self-signed per `hello` in `practice3`;
+8. troubleshooting: node selector senza nodo corrispondente e selector
+   del service sbagliato;
+9. service account `gitlab-sa` con SCC anyuid, scale a 5 e HPA 3-10 al 60%.
+
+Prima di avviarla: `oc login -u admin -p redhatocp https://api.lab.example.com:6443`
+(ogni `setup()` lo controlla e si ferma con un messaggio chiaro).
+
+- **Stato cluster-wide, ambiente condiviso**: OAuth, secret `localusers`,
+  ClusterRoleBinding, label dei nodi. Ogni `cleanup()` riporta il cluster
+  allo stato del classroom — in particolare l'es. 5 ripristina
+  `self-provisioners` (senza, `developer` non potrebbe piu' creare progetti
+  e la traccia DO180 si romperebbe). Dopo una chiusura brusca della
+  finestra: `training cleanup try-exam ex280`.
+- **Cleanup e setup in parallelo**: il monitor lancia il cleanup
+  dell'esercizio che si lascia in parallelo al setup del successivo, e piu'
+  esercizi condividono lo stesso progetto (`practice3`, `console-review`,
+  nomi del tema). `setup()`/`cleanup()` girano quindi sotto un flock
+  (`_ex280_common.track_lock()`), e i progetti creati da un `setup()` hanno
+  la label `ex280-training/owner=<esercizio>`: un cleanup cancella solo cio'
+  che e' suo.
+- **Grading per risultato**: i permessi (es. 5, SCC dell'es. 9) si
+  verificano con `oc auth can-i --as=<utente>`, le RoleBinding per
+  contenuto e non per nome, le password HTPasswd con `htpasswd -v` (qualunque
+  formato di hash).
+- **Scostamenti dal tema annotato**: host delle route sul dominio di
+  questo cluster (`apps_domain()`), non `apps.ocp4.example.com`. Es. 3: la
+  quota a 2 pod non lascia partire database + 2 repliche — il tema non dice
+  come andava risolto, quindi si gradano repliche richieste = 2 e app
+  funzionante, non quante repliche sono pronte. Non e' gradabile *quale*
+  utente ha creato le risorse. Es. 4: nomi fissi per secret/IdP (il tema
+  aveva segnaposto). Es. 8: niente guasto "taint sul nodo", su un SNO
+  condiviso bloccherebbe anche i pod di sistema. Es. 9: l'immagine gitlab
+  non c'e' nel registry del classroom, al suo posto httpd con
+  `runAsUser: 0`, che come gitlab non parte senza anyuid.
 
 ## Esercizi coperti
 
