@@ -53,7 +53,7 @@ bash /tmp/do180-lab-grading/install.sh
 | `bashrc.d/training.sh` | `~/.bashrc.d/training.sh` | Comandi `training`/`start-training`/`start-training-do188` |
 | `training/_training_common.py`, `training/exercises/*.py` | `~/.local/share/training/` | Libreria condivisa + esercizi del training libero DO180 |
 | `training/exercises-do188/*.py` | `~/.local/share/training/exercises-do188/` | Esercizi del training libero DO188 (stato Podman locale) |
-| `training/exercises-try-exam-<esame>/*.py` | `~/.local/share/training/exercises-try-exam-<esame>/` | Simulazioni d'esame, una directory per esame (`start-try-exam ex188`, `start-try-exam ex280`) |
+| `training/exercises-try-exam-<esame>/*.py` | `~/.local/share/training/exercises-try-exam-<esame>/` | Simulazioni d'esame, una directory per esame (`start-try-exam ex180`, `start-try-exam ex188`, `start-try-exam ex280`) |
 
 ## Come funziona il wrapper
 
@@ -148,7 +148,10 @@ separatamente), a seconda di dove vive lo stato da gradare:
   il capitolo 8, non tocca mai OpenShift — vedi [sotto](#do188-training-red-hat-openshift-development-i)).
 - **try-exam `<esame>`** (`start-try-exam <esame>`) — simulazioni d'esame,
   esercizi più lunghi e senza comandi suggeriti. L'esame va sempre
-  indicato; oggi ce ne sono due:
+  indicato; oggi ce ne sono tre:
+  - `ex180` — DO180, stato sul cluster OpenShift (basta il login come
+    `developer`), 10 esercizi — vedi
+    [sotto](#try-exam-ex180-simulazione-desame-do180);
   - `ex188` — DO188, stato Podman locale, 6 esercizi — vedi
     [sotto](#try-exam-ex188-simulazione-desame-do188);
   - `ex280` — stato sul cluster OpenShift (anche cluster-wide, serve il
@@ -171,6 +174,7 @@ comandi elencano quelli disponibili.
 ```bash
 start-training          # traccia DO180 — equivalente a 'training start do180'
 start-training-do188    # traccia DO188 — equivalente a 'training start do188'
+start-try-exam ex180    # simulazione d'esame DO180 — equivalente a 'training start try-exam ex180'
 start-try-exam ex188    # simulazione d'esame DO188 — equivalente a 'training start try-exam ex188'
 start-try-exam ex280    # simulazione d'esame EX280 — equivalente a 'training start try-exam ex280'
 ```
@@ -517,6 +521,80 @@ Prima di avviarla: `oc login -u admin -p redhatocp https://api.lab.example.com:6
   condiviso bloccherebbe anche i pod di sistema. Es. 9: l'immagine gitlab
   non c'e' nel registry del classroom, al suo posto httpd con
   `runAsUser: 0`, che come gitlab non parte senza anyuid.
+
+### Try-exam EX180: simulazione d'esame DO180
+
+`training/exercises-try-exam-ex180/` (`start-try-exam ex180`) riproduce un
+facsimile d'esame DO180/EX180 incollato dall'utente: 10 esercizi, stesso
+formato delle altre simulazioni (niente comandi nel testo, pulsante
+**"Mostra soluzione"**). Un file per punto del tema:
+
+| Tema | File | Cosa si chiede (nomi e valori nostri) |
+|---|---|---|
+| 0+1 | `e01-oc-download.py` | scaricare `oc` in `~/ex180-remote/` senza copiare quello di sistema |
+| 2 | `e02-configmap.py` | ConfigMap `app-config` con `GREETING`/`APP_ENV` |
+| 3 | `e03-secret-index.py` | secret `web-index` dal file `~/try-exam-ex180/index.html` |
+| 4 | `e04-deployment-secret-configmap.py` | deployment `web` con il secret su `/messages` e la ConfigMap |
+| 5 | `e05-pvc-storageclass.py` | PVC `data-pvc` da 24G con storage class `lvms-vg1` |
+| 6 | `e06-mount-pvc.py` | montare la PVC esistente sul deployment `data-app` in `/data` |
+| 7 | `e07-probes.py` | liveness e readiness HTTP GET su `/` porta 8080 |
+| 8 | `e08-scale-10.py` | scalare `web` a 10 repliche |
+| 9 | `e09-limits.py` | limiti di `api`: memoria 256Mi, CPU 250m |
+| 10 | `e10-dump-upload.py` | `oc cluster-info dump`, `tar`, upload con l'utility (segnaposto) `rh-upload` sul caso 01234567 |
+
+Prima di avviarla: `oc login -u developer -p developer https://api.<dominio>:6443`
+(serve solo un utente che possa creare progetti, come per la traccia DO180).
+
+- **Un progetto per esercizio** (`ex180-e02` ... `ex180-e10`): nell'esame i
+  punti si appoggiano l'uno sull'altro (configmap e secret -> deployment,
+  PVC -> mount), qui ogni `setup()` crea gia' cio' che il punto precedente
+  avrebbe prodotto. Nessun esercizio dipende da come e' andato il
+  precedente, e il cleanup di uno (in parallelo al setup del successivo)
+  non tocca il progetto dell'altro: niente flock ne' label di proprieta'
+  come in ex280. I file locali condivisi (`~/try-exam-ex180/index.html`)
+  si scrivono in modo atomico e i cleanup non li cancellano.
+- **Grading per risultato**: montaggi e uso della ConfigMap cercati per
+  contenuto (qualunque nome di volume; ConfigMap via `envFrom`, `env` o
+  volume), quantita' confrontate come numeri (`250m` = `0.25`), porte
+  delle probe anche per nome. "Disponibile" vuol dire un pod Running e
+  Ready della versione NUOVA del deployment (con il volume, le probe o i
+  limiti richiesti): dopo `oc set ...` il pod vecchio resta disponibile
+  finche' il nuovo non parte, e `availableReplicas` da solo direbbe PASS
+  anche con una PVC sbagliata. In e04 si legge `/messages/index.html`
+  dentro il pod con `oc exec`. In e01 il binario deve avere lo stesso
+  sha256 del file `oc` dentro l'archivio lasciato nella directory (`oc.tar`
+  della console o `openshift-client-linux.tar.gz`); gli sha sono in cache
+  per non rileggere decine di MB a ogni poll.
+- **Scostamenti dal tema annotato**: il tema non da' nomi ne' valori, quindi
+  progetti, nomi delle risorse, immagine (`ubi9/httpd-24`), percorsi,
+  limiti e numero del caso sono scelte nostre (dichiarate nel docstring di
+  ogni file); `/messages`, 24G e 10 repliche invece sono del tema. Punto 0:
+  la connessione ssh alla "macchina M" non e' verificabile, si lavora
+  sulla workstation. Punto 5: `24G` in Kubernetes e' decimale (24·10^9) e
+  diverso da `24Gi`: si accettano entrambi; non si pretende `Bound`
+  (WaitForFirstConsumer) ne' una access mode. Punto 6: la PVC creata dal
+  setup e' da 1Gi, non 24G (spazio del classroom ignoto; qui deve
+  diventare davvero Bound). Punto 7: "health probe" letta come readiness
+  (nostra interpretazione); il setup mette un `index.html` nella document
+  root perche' l'httpd UBI su `/` vuoto potrebbe rispondere 403. Punto 8:
+  si grada `spec.replicas == 10` e almeno un pod disponibile, non 10 pod
+  pronti (capacita' del cluster ignota). Punto 10: dump limitato al
+  progetto `ex180-e10` (`--namespaces`), come `c9-01`; **l'utility di
+  upload dell'esame non e' nota**: `setup()` installa il segnaposto
+  `~/.local/bin/rh-upload --case <numero> <file>`, che "carica" copiando
+  il file in `~/.local/share/training/ex180-state/portal/<numero>/`
+  (rimosso dal `cleanup()`, che non tocca un `rh-upload` non suo). Va
+  sostituito con l'utility vera (es. `redhat-support-tool addattachment`?)
+  appena si sa qual era.
+- **Non verificato dal vivo**: la traccia e' stata scritta senza un cluster
+  disponibile, con test offline (uno shim di `oc` che emula lo stato del
+  cluster: ogni `grade()` provato su stati "non fatto", "sbagliato" e
+  "corretto", piu' setup/cleanup ripetuti e in parallelo). Da confermare
+  al primo uso sul classroom: URL di download di `oc` dalla console, la
+  storage class `lvms-vg1`, la risposta di `ubi9/httpd-24` su `/`, e
+  soprattutto se `oc cluster-info dump --namespaces` funziona come
+  `developer` (il comando legge anche la lista dei nodi e potrebbe
+  fermarsi con "nodes is forbidden": in quel caso va eseguito come admin).
 
 ## Esercizi coperti
 

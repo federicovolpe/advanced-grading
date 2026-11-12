@@ -295,10 +295,19 @@ esplicitamente.
 
 Un tema d'esame (es. annotato dall'utente dopo l'esame) va in una directory
 `training/exercises-try-exam-<esame>/`, con `<esame>` = codice d'esame in
-minuscolo (`ex188`, `ex280`, ...). Non serve toccare `install.sh` ne'
+minuscolo (`ex180`, `ex188`, `ex280`, ...). Non serve toccare `install.sh` ne'
 `bashrc.d/training.sh`: entrambi scoprono gli esami dalle directory, e lo
 studente lo avvia con `start-try-exam <esame>` (l'esame e' obbligatorio).
 Stesso formato delle tracce di training, ma niente comandi nel `TASK`: la
 soluzione va nel campo opzionale `SOLUTION` (pulsante "Mostra soluzione").
 Le utilita' condivise dell'esame stanno in un modulo `_<nome>.py` nella
-stessa directory (vedi `_exam_common.py`, `_ex280_common.py`).
+stessa directory (vedi `_exam_common.py`, `_ex180_common.py`,
+`_ex280_common.py`). Due modi di gestire i progetti: in ex280 piu' esercizi
+condividono lo stesso progetto (nomi del tema) e servono flock e label di
+proprieta', perche' il monitor lancia il cleanup dell'esercizio lasciato in
+parallelo al setup del successivo; in ex180 ogni esercizio ha il SUO
+progetto (`ex180-eNN`) e il suo `setup()` ricrea cio' che il punto
+precedente del tema avrebbe prodotto, cosi' non serve nessuna
+sincronizzazione. Ricorda che `SETUP_TIMEOUT` va importato/definito nel
+file dell'esercizio: il monitor lo legge dal namespace di quel file, non
+dal modulo comune.
